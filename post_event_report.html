@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Post-Event Report • SEPAS</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="shell" id="shell">
+ <aside class="sidebar">
+ <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+ <nav class="nav" id="nav"></nav>
+ <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+ </aside>
+ <main class="main">
+ <header class="top">
+ <div style="display:flex;align-items:center;gap:14px">
+ <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+ <div><h1 id="page-title">Post-Event Report</h1><p id="page-sub">Submit a report after your approved event.</p></div>
+ </div>
+ <a class="user-chip" href="settings.html"><span class="avatar" id="avatar">●</span><span><strong id="u-name"></strong><small id="u-role"></small></span></a>
+ </header>
+ <div class="lower">
+ <section class="card">
+ <div class="section-head"><div><h2>Submit Report</h2><p class="section-subtitle">Choose an approved event.</p></div></div>
+ <div class="field"><label>Approved Event *</label><select class="inp" id="sel"><option>Loading...</option></select></div>
+ <div id="form-area" style="display:none">
+ <form id="f">
+ <div class="field"><label>Report Title *</label><input class="inp" id="report_title" required placeholder="e.g. Post-Event Summary Report"></div>
+ <div class="field"><label>Report Content *</label><textarea class="inp" id="report_content" required style="min-height:160px" placeholder="Attendees, outcome, expenses, highlights, issues..."></textarea></div>
+ <div class="field"><label>Attach Files (optional — max 10MB each)</label>
+ <input class="inp" type="file" id="rfiles" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx,.ppt,.pptx,.txt">
+ <div id="rfile-list" class="muted" style="font-size:12px;margin-top:6px"></div>
+ </div>
+ <div class="form-actions"><button class="btn btn-primary" type="submit" id="subBtn">Submit Report</button></div>
+ </form>
+ </div>
+ </section>
+ <section class="card">
+ <div class="section-head"><div><h2>My Previous Reports</h2><p class="section-subtitle">Reports you have submitted.</p></div></div>
+ <div id="list"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
+ </section>
+ </div>
+ </main>
+</div>
+<script src="app.js"></script>
+<script>
+pageShell('reports');
+let APPROVED=[], SEL=null;
+const q=new URLSearchParams(location.search);
+async function init(){
+ const [p,o,r]=await Promise.all([
+ api({action:"all",table:"event_proposals"}),
+ api({action:"all",table:"organizers"}),
+ api({action:"where",table:"post_event_reports",field:"submitted_by",value:String(USER.user_id)})
+ ]);
+ let all=Array.isArray(p)?p:[];
+ const me=(Array.isArray(o)?o:[]).find(x=>String(x.user_id)===String(USER.user_id));
+ if(me) all=all.filter(x=>String(x.organizer_id)===String(me.organizer_id));
+ APPROVED=all.filter(x=>x.current_status==='Approved');
+ const sel=document.getElementById('sel');
+ sel.innerHTML=APPROVED.length?'<option value="">— choose —</option>'+APPROVED.map(x=>'<option value="'+x.proposal_id+'">#'+x.proposal_id+' '+esc(x.event_title)+'</option>').join(''):'<option>No approved events</option>';
+ if(q.get('id')){sel.value=q.get('id');selectP();}
+ const reports=(Array.isArray(r)?r:[]).sort((a,b)=>String(b.submitted_at).localeCompare(String(a.submitted_at)));
+ document.getElementById('list').innerHTML=reports.length?reports.map(x=>
+ '<div class="event-mini"><span class="date-badge" style="background:#e5f8ec;color:#16a34a"></span>'+
+ '<div style="flex:1"><strong>'+esc(x.report_title)+'</strong>'+
+ '<span class="venue">Proposal #'+esc(x.proposal_id)+' • '+esc(fmtDate(x.submitted_at))+'</span></div>'+
+ (x.file_path?'<a class="btn btn-outline" style="padding:6px 12px" href="'+esc(x.file_path)+'" target="_blank">File</a>':'')+
+ '</div>').join(''):'<div class="empty"><p>No reports submitted yet.</p></div>';
+}
+function selectP(){
+ const id=document.getElementById('sel').value;
+ SEL=APPROVED.find(x=>String(x.proposal_id)===String(id));
+ document.getElementById('form-area').style.display=SEL?'block':'none';
+}
+function readFileAsBase64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});}
+document.getElementById('rfiles').addEventListener('change',e=>{
+ document.getElementById('rfile-list').textContent=[...e.target.files].map(f=>'» '+f.name+' ('+(f.size/1024).toFixed(0)+' KB)').join(' • ');
+});
+document.getElementById('sel').addEventListener('change',selectP);
+document.getElementById('f').addEventListener('submit',async e=>{
+ e.preventDefault();if(!SEL){toast('Choose an event first.',true);return;}
+ const b=document.getElementById('subBtn');b.disabled=true;b.textContent='Submitting...';
+ try{
+ const uploadedFiles=[];
+ const fi=document.getElementById('rfiles');
+ if(fi&&fi.files.length){
+ b.textContent='Uploading '+fi.files.length+' file(s)...';
+ for(const file of fi.files){
+ if(file.size>10*1024*1024){toast('File too large: '+file.name+' (max 10MB)',true);b.disabled=false;b.textContent='Submit Report';return;}
+ const base64=await readFileAsBase64(file);
+ const up=await api({action:"upload_file",data:{base64:base64,filename:file.name,mimeType:file.type||'application/octet-stream'}});
+ if(up.success)uploadedFiles.push({file_path:up.url,original_name:file.name});
+ else{toast('Upload failed: '+(up.message||file.name),true);b.disabled=false;b.textContent='Submit Report';return;}
+ }
+ b.textContent='Submitting...';
+ }
+ const r=await api({action:"submit_report",data:{
+ proposal_id:SEL.proposal_id,submitted_by:USER.user_id,
+ report_title:document.getElementById('report_title').value,
+ report_content:document.getElementById('report_content').value,
+ file_path: uploadedFiles.length?uploadedFiles[0].file_path:'',
+ files: uploadedFiles
+ }});
+ if(r.success){toast(' Report submitted!');setTimeout(()=>location.reload(),1200);}
+ else{toast('Failed.',true);b.disabled=false;b.textContent='Submit Report';}
+ }catch(err){toast('Connection error.',true);b.disabled=false;b.textContent='Submit Report';}
+});
+init();
+</script>
+</body>
+</html>

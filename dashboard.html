@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard • SEPAS</title>
+<style>
+:root{--navy:#101d52;--blue:#2b64e8;--bg:#eef1f6;--card:#f7f7f8;--text:#243047;--muted:#71809a;--line:#dfe4ee;--green:#16a34a;--amber:#f59e0b;--red:#ef4444;--orange:#f97316}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+.shell{min-height:100vh;display:flex}
+.sidebar{width:240px;min-height:100vh;background:var(--navy);color:#fff;position:fixed;left:0;top:0;bottom:0;padding:24px 12px;display:flex;flex-direction:column;z-index:20}
+.brand{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;font-size:18px;padding:0 12px 28px}
+.brand-icon{width:28px;height:28px;border-radius:6px;background:#2d67ed;display:grid;place-items:center;font-size:13px;font-weight:800}
+.nav{display:flex;flex-direction:column;gap:4px;flex:1}
+.nav a{display:flex;align-items:center;gap:12px;color:#aeb9d6;text-decoration:none;padding:11px 13px;border-radius:8px;font-size:14px}
+.nav a:hover,.nav a.active{background:#2863e8;color:#fff;font-weight:700}
+.nav-icon{width:18px;text-align:center}
+.nav-dot{margin-left:auto;width:18px;height:18px;border-radius:50%;background:#ef4444;color:#fff;font-size:10px;display:grid;place-items:center;font-weight:700}
+.logout{display:flex;align-items:center;gap:12px;color:#aeb9d6;text-decoration:none;padding:11px 13px;border-radius:8px;font-size:14px;margin-top:8px}
+.logout:hover{background:rgba(239,68,68,.2);color:#fff}
+.main{margin-left:240px;width:calc(100% - 240px);padding:28px 40px 50px;min-height:100vh}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+.top h1{margin:0;font-size:22px}
+.top p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.menu-toggle{display:none;background:none;border:1px solid var(--line);border-radius:8px;font-size:16px;padding:6px 10px;cursor:pointer}
+.user-chip{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit}
+.user-chip strong{display:block;font-size:13px}
+.user-chip small{color:var(--muted);font-size:11px}
+.avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:17px}
+.hero{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:24px 26px;margin-bottom:20px;background:linear-gradient(135deg,#fff,#eff4ff);border:1px solid #fff;border-radius:16px;box-shadow:0 8px 24px rgba(34,55,100,.07)}
+.kicker{font-size:11px;letter-spacing:1.5px;color:var(--blue);font-weight:700}
+.hero h2{margin:6px 0;font-size:24px}
+.hero p{margin:0;color:var(--muted);font-size:13px}
+.btn{display:inline-block;padding:10px 18px;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer;border:0}
+.btn-primary{background:var(--blue);color:#fff;box-shadow:0 6px 14px rgba(43,100,232,.25)}
+.btn-outline{background:#fff;color:var(--blue);border:1.5px solid var(--blue)}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.card{background:rgba(250,250,251,.95);border:1px solid rgba(255,255,255,.7);border-radius:14px;box-shadow:0 4px 15px rgba(34,55,100,.06);padding:24px}
+.metric{display:flex;align-items:center;gap:13px}
+.metric-icon{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;font-size:19px;background:#e3ecff;color:var(--blue)}
+.metric-icon.green{background:#e5f8ec;color:var(--green)}
+.metric-icon.amber{background:#fdf3e1;color:var(--amber)}
+.metric-icon.red{background:#fdeaea;color:var(--red)}
+.metric label{display:block;font-size:11px;color:var(--muted);font-weight:600}
+.metric strong{font-size:26px}
+.metric small{display:block;font-size:10px;color:var(--muted)}
+.analytics{display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:20px}
+.section-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.section-head h2{margin:0;font-size:16px}
+.section-subtitle{margin:3px 0 0;color:var(--muted);font-size:12px}
+.badge{background:#e3ecff;color:var(--blue);font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px;letter-spacing:.5px}
+.bar-chart{padding:6px 0}
+.chart-row{display:grid;grid-template-columns:85px 1fr 30px;align-items:center;gap:10px;margin:14px 0;font-size:11px;color:var(--muted)}
+.chart-track{height:9px;background:#edf0f6;border-radius:99px;overflow:hidden}
+.chart-track i{display:block;height:100%;width:0;background:var(--blue);border-radius:99px;transition:width .6s ease}
+.chart-track.green i{background:var(--green)} .chart-track.amber i{background:var(--amber)}
+.chart-track.orange i{background:var(--orange)} .chart-track.red i{background:var(--red)}
+.chart-footer{display:flex;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+.donut{width:150px;height:150px;margin:8px auto 16px;border-radius:50%;background:#edf0f6;position:relative;box-shadow:0 0 0 9px #fff}
+.donut:after{content:"";position:absolute;inset:32px;background:#fff;border-radius:50%}
+.legend{display:flex;flex-direction:column;gap:9px}
+.legend>div{display:flex;align-items:center;gap:9px;font-size:12px}
+.legend strong{margin-left:auto}
+.dot{width:10px;height:10px;border-radius:50%}
+.lower{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.link{color:var(--blue);text-decoration:none;font-size:12px;font-weight:600}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;color:var(--muted);font-weight:600;padding:9px 10px;border-bottom:1px solid var(--line)}
+td{padding:11px 10px;font-size:13px;border-bottom:1px solid #eef1f6}
+td small{display:block;color:var(--muted);font-size:11px}
+.status{display:inline-flex;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:700}
+.status-approved{background:#e5f8ec;color:var(--green)}
+.status-rejected{background:#fdeaea;color:var(--red)}
+.status-returned{background:#fff0e5;color:var(--orange)}
+.status-pending{background:#e3ecff;color:var(--blue)}
+.status-draft{background:#edf0f6;color:var(--muted)}
+.event-mini{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid #e1e6ee;border-radius:9px;padding:12px;margin-bottom:9px}
+.date-badge{width:48px;height:48px;border-radius:9px;background:#e3ecff;color:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;font-weight:700;text-transform:uppercase}
+.date-badge strong{font-size:16px}
+.event-mini span.venue{display:block;color:var(--muted);font-size:11px}
+.empty{text-align:center;padding:32px 16px;color:var(--muted);font-size:13px}
+.loading-wrap{text-align:center;padding:40px;color:var(--muted)}
+.spin{width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:1100px){.grid4{grid-template-columns:1fr 1fr}.analytics,.lower{grid-template-columns:1fr}}
+@media(max-width:720px){
+ .sidebar{transform:translateX(-100%);transition:transform .25s}
+ .shell.nav-open .sidebar{transform:translateX(0)}
+ .main{margin-left:0;width:100%;padding:20px 16px}
+ .menu-toggle{display:block}
+}
+</style>
+</head>
+<body>
+<div class="shell" id="shell">
+
+ <aside class="sidebar">
+ <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+ <nav class="nav" id="nav"></nav>
+ <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+ </aside>
+
+ <main class="main">
+ <header class="top">
+ <div style="display:flex;align-items:center;gap:14px">
+ <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+ <div><h1>Dashboard</h1><p>A clear overview of proposals, reviews, approvals, and upcoming events.<br><span id="last-updated" style="font-size:11px;color:#9aa7bd"></span></p></div>
+ </div>
+ <a class="user-chip" href="#">
+ <span class="avatar" id="avatar">●</span>
+ <span><strong id="u-name">User</strong><small id="u-role"></small></span>
+ </a>
+ </header>
+
+ <div class="hero">
+ <div>
+ <span class="kicker">SEPAS OVERVIEW</span>
+ <h2 id="welcome">Welcome back.</h2>
+ <p>Track your event proposals and keep every approval step in one place.</p>
+ </div>
+ <div id="hero-actions" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+ </div>
+
+ <div class="grid4">
+ <div class="card metric"><span class="metric-icon">▦</span><div><label>Total Proposals</label><strong id="m-total">–</strong><small>All proposals</small></div></div>
+ <div class="card metric"><span class="metric-icon green"></span><div><label>Approved</label><strong id="m-approved">–</strong><small>Ready for implementation</small></div></div>
+ <div class="card metric"><span class="metric-icon amber">◷</span><div><label>In Review</label><strong id="m-pending">–</strong><small>Moving through approval</small></div></div>
+ <div class="card metric"><span class="metric-icon red">×</span><div><label>Rejected</label><strong id="m-rejected">–</strong><small>Needs a new proposal</small></div></div>
+ </div>
+
+ <div class="analytics">
+ <section class="card">
+ <div class="section-head">
+ <div><h2>Proposal Activity</h2><p class="section-subtitle">Current proposal distribution in your workflow.</p></div>
+ <span class="badge">LIVE DATA</span>
+ </div>
+ <div class="bar-chart">
+ <div class="chart-row"><span>Total</span><div class="chart-track"><i id="bar-total"></i></div><b id="v-total">0</b></div>
+ <div class="chart-row"><span>Approved</span><div class="chart-track green"><i id="bar-approved"></i></div><b id="v-approved">0</b></div>
+ <div class="chart-row"><span>In Review</span><div class="chart-track amber"><i id="bar-pending"></i></div><b id="v-pending">0</b></div>
+ <div class="chart-row"><span>Returned</span><div class="chart-track orange"><i id="bar-returned"></i></div><b id="v-returned">0</b></div>
+ <div class="chart-row"><span>Rejected</span><div class="chart-track red"><i id="bar-rejected"></i></div><b id="v-rejected">0</b></div>
+ </div>
+ <div class="chart-footer"><span>Powered by Google Apps Script</span><strong id="v-total2">0 total</strong></div>
+ </section>
+
+ <section class="card">
+ <div class="section-head"><div><h2>Workflow Status</h2><p class="section-subtitle">Where proposals are currently sitting.</p></div></div>
+ <div class="donut" id="donut"></div>
+ <div class="legend">
+ <div><span class="dot" style="background:#2863e8"></span><span>In Review</span><strong id="l-pending">0</strong></div>
+ <div><span class="dot" style="background:#16a34a"></span><span>Approved</span><strong id="l-approved">0</strong></div>
+ <div><span class="dot" style="background:#ef4444"></span><span>Rejected</span><strong id="l-rejected">0</strong></div>
+ </div>
+ </section>
+ </div>
+
+ <div class="lower">
+ <section class="card">
+ <div class="section-head">
+ <div><h2>Recent Proposals</h2><p class="section-subtitle">Latest activity in the proposal workflow.</p></div>
+ </div>
+ <div id="recent-wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
+ </section>
+ <section class="card">
+ <div class="section-head"><div><h2>Upcoming Events</h2><p class="section-subtitle">Approved events scheduled next.</p></div></div>
+ <div id="upcoming-wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
+ </section>
+ </div>
+ </main>
+</div>
+
+<script>
+// ============================================================
+// KONFIGURASYON
+// ============================================================
+const API_URL = "https://script.google.com/macros/s/AKfycbxmVnEwu2Z0blYzK1xZFK75lbnwFEyPrF6VKIVBk8DXKwVrRUD4L5j8Fg2gfIAJhuvd/exec";
+const API_TOKEN = "SEPASSYSTEM2026";
+const PENDING = ['Pending Review','Pending Dean Review','Pending Finance Review','Awaiting Final Approval'];
+
+const AVATARS = {
+ 'System Administrator': ['#8B5CF6','♛'], 'Organizer': ['#38BDF8','▦'],
+ 'Finance': ['#34D399','₱'], 'School President': ['#FBBF24','♜'],
+ 'Student Affairs': ['#F472B6',''], 'Department Dean': ['#67E8F9','⚑']
+};
+
+// ------------------------------------------------------------
+// SESSION GUARD - redirect to login page if not logged in
+// ------------------------------------------------------------
+const sessionRaw = localStorage.getItem("sepas_user");
+if (!sessionRaw) window.location.href = "index.html";
+const USER = JSON.parse(sessionRaw);
+
+function logout() {
+ if (confirm("Are you sure you want to log out?")) {
+ localStorage.removeItem("sepas_user");
+ window.location.href = "index.html";
+ }
+}
+
+// ------------------------------------------------------------
+// SIDEBAR (base sa role, parehas sa PHP version)
+// ------------------------------------------------------------
+function buildNav() {
+ const links = [['dashboard','Dashboard','dashboard.html','▦',true]];
+ const r = USER.role;
+ if (r === 'Organizer') links.push(['proposals','Event Proposals','proposals.html','▤'],['create','New Proposal','create_proposal.html','＋'],['reports','Reports','workspace.html','▥']);
+ else if (r === 'Student Affairs') links.push(['review','Event Proposals','review.html','▤']);
+ else if (r === 'Department Dean') links.push(['review','Event Proposals','review.html','▤']);
+ else if (r === 'Finance') links.push(['review','Financial Review','financial_review.html','▤']);
+ else if (r === 'School President') links.push(['approval','Final Approval','final_approval.html','▤']);
+ else if (r === 'System Administrator') links.push(['users','User Management','users.html','♙']);
+ links.push(['workspace','Budget & Comments','workspace.html','₱'],['notifications','Notifications','notifications.html','♧'],['calendar','Calendar','calendar.html','□'],['settings','Settings','settings.html','⚙']);
+ document.getElementById('nav').innerHTML = links.map(l =>
+ `<a class="${l[4] ? 'active' : ''}" href="${l[2]}"><span class="nav-icon">${l[3]}</span><span>${l[1]}</span></a>`).join('');
+}
+
+// ------------------------------------------------------------
+// API HELPER (POST ra, para dili ma-block sa browser)
+// ------------------------------------------------------------
+async function api(body) {
+ const res = await fetch(API_URL, {
+ method: "POST",
+ headers: { "Content-Type": "text/plain" },
+ body: JSON.stringify({ token: API_TOKEN, ...body })
+ });
+ return res.json();
+}
+
+// ------------------------------------------------------------
+// RENDERING
+// ------------------------------------------------------------
+const esc = s => { const d = document.createElement('div'); d.textContent = (s ?? ''); return d.innerHTML; };
+const fmtDate = s => {
+ if (!s) return '';
+ const d = new Date(String(s).replace(' ', 'T'));
+ return isNaN(d) ? String(s) : d.toLocaleDateString('en-US', { month:'short', day:'2-digit', year:'numeric' });
+};
+const statusClass = s =>
+ s === 'Approved' ? 'status-approved' :
+ s === 'Rejected' ? 'status-rejected' :
+ s === 'Returned for Revision' ? 'status-returned' :
+ PENDING.includes(s) ? 'status-pending' : 'status-draft';
+
+function heroButtons() {
+ const map = {
+ 'Organizer': `<a class="btn btn-primary" href="create_proposal.html">+ New Proposal</a><a class="btn btn-outline" href="proposals.html">View Proposals</a>`,
+ 'Finance': `<a class="btn btn-primary" href="financial_review.html">Open Finance Review</a>`,
+ 'School President': `<a class="btn btn-primary" href="final_approval.html">Open Final Approval</a>`,
+ 'Department Dean': `<a class="btn btn-primary" href="dean_review.html">Open Dean Review</a>`,
+ 'Student Affairs': `<a class="btn btn-primary" href="review.html">Open Review Queue</a>`,
+ 'System Administrator': `<a class="btn btn-primary" href="users.html">Manage Users</a>`
+ };
+ document.getElementById('hero-actions').innerHTML = (map[USER.role] || '') +
+ ' <button class="btn btn-outline" onclick="load()">Refresh</button>';
+}
+
+function countdown(dateStr) {
+ const today = new Date(); today.setHours(0,0,0,0);
+ const d = new Date(String(dateStr).replace(' ', 'T'));
+ if (isNaN(d)) return '';
+ d.setHours(0,0,0,0);
+ const days = Math.round((d - today) / 86400000);
+ if (days < 0) return '<span style="color:#16a34a;font-size:11px">✅ Event done</span>';
+ if (days === 0) return '<span style="color:#e67e22;font-size:11px;font-weight:800">🔴 Happening today!</span>';
+ if (days === 1) return '<span style="color:#e67e22;font-size:11px;font-weight:700">⏳ Tomorrow!</span>';
+ return '<span style="color:#66758f;font-size:11px">⏳ ' + days + ' days left</span>';
+}
+function render(items) {
+ const total = items.length;
+ const approved = items.filter(p => p.current_status === 'Approved').length;
+ const rejected = items.filter(p => p.current_status === 'Rejected').length;
+ const returned = items.filter(p => p.current_status === 'Returned for Revision').length;
+ const pending = items.filter(p => PENDING.includes(p.current_status)).length;
+ const max = Math.max(1, total, approved, pending, rejected, returned);
+
+ document.getElementById('m-total').textContent = total;
+ document.getElementById('m-approved').textContent = approved;
+ document.getElementById('m-pending').textContent = pending;
+ document.getElementById('m-rejected').textContent = rejected;
+
+ const set = (bar, val, v) => {
+ document.getElementById(bar).style.width = Math.round((val / max) * 100) + '%';
+ document.getElementById(v).textContent = val;
+ };
+ set('bar-total', total, 'v-total'); set('bar-approved', approved, 'v-approved');
+ set('bar-pending', pending, 'v-pending'); set('bar-returned', returned, 'v-returned');
+ set('bar-rejected', rejected, 'v-rejected');
+ document.getElementById('v-total2').textContent = total + ' total';
+
+ const pct = n => total > 0 ? (n / total) * 100 : 0;
+ const pEnd = pct(pending), aEnd = pEnd + pct(approved), rEnd = aEnd + pct(rejected);
+ document.getElementById('donut').style.background =
+ `conic-gradient(#2863e8 0 ${pEnd}%,#16a34a ${pEnd}% ${aEnd}%,#ef4444 ${aEnd}% ${rEnd}%,#f59e0b ${rEnd}% 100%)`;
+ document.getElementById('l-pending').textContent = pending;
+ document.getElementById('l-approved').textContent = approved;
+ document.getElementById('l-rejected').textContent = rejected;
+
+ // Recent proposals
+ const recent = [...items].sort((a,b) => String(b.submitted_at).localeCompare(String(a.submitted_at))).slice(0, 6);
+ const rw = document.getElementById('recent-wrap');
+ rw.innerHTML = recent.length === 0
+ ? '<div class="empty"><h3 style="margin:0 0 6px;color:var(--text)">No proposals yet</h3><p style="margin:0">Your recent proposal activity will appear here.</p></div>'
+ : `<table><thead><tr><th>Event</th><th>Date</th><th>Status</th></tr></thead><tbody>${
+ recent.map(p => `<tr>
+ <td><strong>${esc(p.event_title)}</strong><small>#${esc(p.proposal_id)}</small></td>
+ <td>${esc(fmtDate(p.submitted_at || p.proposed_date))}</td>
+ <td><span class="status ${statusClass(p.current_status)}">${esc(p.current_status)}</span></td>
+ </tr>`).join('')}</tbody></table>`;
+
+ // Upcoming events
+ const today = new Date().toISOString().slice(0, 10);
+ const upcoming = items
+ .filter(p => p.current_status === 'Approved' && String(p.proposed_date).slice(0,10) >= today)
+ .sort((a,b) => String(a.proposed_date).localeCompare(String(b.proposed_date)));
+ const uw = document.getElementById('upcoming-wrap');
+ uw.innerHTML = upcoming.length === 0
+ ? '<div class="empty"><p style="margin:0">No approved upcoming events.</p></div>'
+ : upcoming.map(p => {
+ const d = new Date(String(p.proposed_date).replace(' ', 'T'));
+ return `<div class="event-mini">
+ <span class="date-badge">${d.toLocaleDateString('en-US',{month:'short'})}<strong>${d.toLocaleDateString('en-US',{day:'2-digit'})}</strong></span>
+ <div style="flex:1;min-width:0"><strong>${esc(p.event_title)}</strong><span class="venue">${esc(p.proposed_venue)}</span>${countdown(p.proposed_date)}</div>
+ </div>`;
+ }).join('');
+}
+
+// ------------------------------------------------------------
+// MAIN LOAD
+// ------------------------------------------------------------
+async function load() {
+ try {
+ const [proposals, organizers] = await Promise.all([
+ api({ action: "all", table: "event_proposals" }),
+ api({ action: "all", table: "organizers" })
+ ]);
+
+ let items = Array.isArray(proposals) ? proposals : [];
+ if (USER.role === 'Organizer') {
+ const me = (Array.isArray(organizers) ? organizers : []).find(o => String(o.user_id) === String(USER.user_id));
+ items = me ? items.filter(p => String(p.organizer_id) === String(me.organizer_id)) : [];
+ }
+ render(items);
+ const lu = document.getElementById('last-updated');
+ if (lu) lu.textContent = '🟢 Live • Last updated: ' + new Date().toLocaleTimeString();
+ } catch(e) {
+ document.getElementById('recent-wrap').innerHTML = '<div class="empty">⚠ Connection failed. Please update the Code.gs, save it, and redeploy the Web App (New version).</div>';
+ document.getElementById('upcoming-wrap').innerHTML = '<div class="empty">—</div>';
+ }
+}
+
+// Init
+document.getElementById('u-name').textContent = USER.full_name;
+document.getElementById('u-role').textContent = USER.role;
+document.getElementById('welcome').textContent = `Welcome back, ${USER.full_name}.`;
+const av = AVATARS[USER.role] || ['#94A3B8','●'];
+const avEl = document.getElementById('avatar');
+avEl.style.background = av[0]; avEl.textContent = av[1];
+buildNav(); heroButtons(); load();
+// Auto-refresh kada 20 seconds para live ang data
+setInterval(function(){if(document.visibilityState==='visible')load();},60000);
+</script>
+</body>
+</html>

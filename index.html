@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SEPAS • Login</title>
+<style>
+:root{--login-navy:#101d52;--login-blue:#2b64e8;--login-light:#dce6f8;--login-text:#1f2d49;--login-muted:#66758f}
+*{box-sizing:border-box}
+html,body{min-height:100%;margin:0}
+body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:#f4f6fa;color:var(--login-text)}
+.login-page{min-height:100vh;display:grid;grid-template-columns:44% 56%;background:#f4f6fa}
+.login-brand-panel{display:flex;align-items:center;justify-content:center;padding:60px;position:relative;overflow:hidden;background:linear-gradient(160deg,#e8eef9 0%,#dde7f6 100%)}
+.login-brand-panel:before{content:"";position:absolute;width:390px;height:390px;border-radius:50%;background:rgba(72,111,225,.08);top:-160px;left:-100px}
+.login-brand-panel:after{content:"";position:absolute;width:260px;height:260px;border-radius:50%;background:rgba(43,100,232,.07);right:-130px;bottom:-100px}
+.login-brand-content{position:relative;z-index:1;width:min(390px,100%);text-align:center}
+.login-brand-logo{width:104px;height:104px;display:block;margin:0 auto 25px;object-fit:contain;filter:drop-shadow(0 12px 20px rgba(0,0,0,.18))}
+.login-system-title{font-size:34px;line-height:1.12;letter-spacing:-.7px;margin:0 0 13px;font-weight:850;color:#101d52}
+.login-system-name{font-size:14px;line-height:1.65;color:#4a5b78;margin:0 auto 22px;max-width:330px;font-weight:500}
+.login-tagline{font-size:14px;line-height:1.7;color:#6b7c98;margin:0 auto;max-width:330px}
+.login-form-panel{display:flex;align-items:center;justify-content:center;padding:45px 7vw;background:#f4f6fa}
+.login-card{width:min(470px,100%);background:#ffffff;border:1px solid #d5dcea;border-radius:22px;padding:42px 44px;box-shadow:0 22px 60px rgba(30,48,90,.18)}
+.login-form-logo{width:78px;height:78px;display:block;margin:0 0 24px;object-fit:contain}
+.login-welcome{font-size:32px;line-height:1.15;letter-spacing:-.6px;margin:0 0 9px;color:#0e1c3a;font-weight:850}
+.login-subtitle{margin:0 0 28px;color:#3d4c66;font-size:15px;font-weight:500}
+.login-error{background:#fff0f0;color:#a52727;border:1px solid #ffcaca;border-radius:10px;padding:12px 14px;margin-bottom:18px;font-size:13px}
+.login-field{margin-bottom:18px}
+.login-field label{display:block;font-size:13px;font-weight:750;margin-bottom:8px;color:#16223c}
+.login-input{width:100%;height:50px;border:1.5px solid #9fb0cc;border-radius:10px;background:#fff;padding:0 14px;color:#1f2d49;font:inherit;outline:none;transition:.2s}
+.login-input:focus{border-color:#2b64e8;box-shadow:0 0 0 3px rgba(43,100,232,.12)}
+.login-button{width:100%;height:48px;border:0;border-radius:10px;background:#2b64e8;color:#fff;font-weight:800;font-size:14px;cursor:pointer;box-shadow:0 8px 18px rgba(43,100,232,.2)}
+.login-button:hover{background:#2457d6}
+.login-button:disabled{background:#7a9bee;cursor:wait}
+.login-footer{text-align:center;margin-top:22px;font-size:12px;color:#5a6b85;font-weight:500}
+@media(max-width:900px){.login-page{grid-template-columns:1fr;background:#f4f6fa}.login-brand-panel{min-height:310px;padding:35px}.login-system-title{font-size:28px}.login-form-panel{padding:30px 20px}.login-card{padding:32px 25px}.login-brand-logo{width:82px;height:82px}}
+</style>
+</head>
+<body>
+<div class="login-page">
+ <section class="login-brand-panel">
+ <div class="login-brand-content">
+ <svg class="login-brand-logo" viewBox="0 0 160 160" role="img" aria-label="SEPAS logo">
+ <defs>
+ <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+ <stop offset="0" stop-color="#4f83ff"/>
+ <stop offset="1" stop-color="#2457d6"/>
+ </linearGradient>
+ </defs>
+ <rect x="7" y="7" width="146" height="146" rx="34" fill="#101d52"/>
+ <rect x="23" y="23" width="114" height="114" rx="28" fill="url(#blue)"/>
+ <path d="M52 49h55v18H75c-5 0-8 2-8 5 0 3 3 5 8 5h27c15 0 24 8 24 20s-9 20-24 20H52V99h49c4 0 7-1 7-4s-3-4-7-4H75c-15 0-25-8-25-21s10-21 25-21h-23z" fill="#fff"/>
+ </svg>
+ <h1 class="login-system-title">SEPAS</h1>
+ <p class="login-system-name">School Event Proposal and Approval Management System</p>
+ <p class="login-tagline">Submit, review, approve, and monitor school event proposals in one organized system.</p>
+ </div>
+ </section>
+
+ <section class="login-form-panel">
+ <div class="login-card">
+ <svg class="login-form-logo" viewBox="0 0 160 160" role="img" aria-label="SEPAS logo">
+ <defs>
+ <linearGradient id="blue2" x1="0" y1="0" x2="1" y2="1">
+ <stop offset="0" stop-color="#4f83ff"/>
+ <stop offset="1" stop-color="#2457d6"/>
+ </linearGradient>
+ </defs>
+ <rect x="7" y="7" width="146" height="146" rx="34" fill="#101d52"/>
+ <rect x="23" y="23" width="114" height="114" rx="28" fill="url(#blue2)"/>
+ <path d="M52 49h55v18H75c-5 0-8 2-8 5 0 3 3 5 8 5h27c15 0 24 8 24 20s-9 20-24 20H52V99h49c4 0 7-1 7-4s-3-4-7-4H75c-15 0-25-8-25-21s10-21 25-21h-23z" fill="#fff"/>
+ </svg>
+ <h2 class="login-welcome">Welcome Back!</h2>
+ <p class="login-subtitle">Sign in to access your SEPAS account.</p>
+
+ <div class="login-error" id="errorBox" style="display:none;"></div>
+
+ <form id="loginForm" autocomplete="on">
+ <div class="login-field">
+ <label for="username">Username</label>
+ <input class="login-input" id="username" autocomplete="username" required autofocus>
+ </div>
+ <div class="login-field">
+ <label for="password">Password</label>
+ <input class="login-input" id="password" type="password" autocomplete="current-password" required>
+ <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:#5a6b85;font-weight:500;margin-top:7px;cursor:pointer"><input type="checkbox" id="showPw" onchange="document.getElementById('password').type=this.checked?'text':'password'"> Show password</label>
+ </div>
+ <button class="login-button" type="submit" id="loginBtn">Log In</button>
+ <div style="text-align:center;margin-top:14px">
+ <a href="#" onclick="toggleRecovery();return false" style="font-size:13px;color:#2b64e8;font-weight:600;text-decoration:none">Forgot password?</a>
+ </div>
+ </form>
+ <div class="login-footer">Secure access • SEPAS Event Approval System • Powered by Google Apps Script</div>
+ </div>
+ </section>
+</div>
+
+<div id="recovery" style="display:none;position:fixed;inset:0;background:rgba(16,29,82,.55);z-index:60;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)toggleRecovery()">
+ <div style="background:#fff;border-radius:18px;padding:30px;max-width:420px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto">
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+ <h3 style="margin:0;font-size:17px;color:#0e1c3a">Reset Your Password</h3>
+ <button onclick="toggleRecovery()" style="background:#edf0f6;border:none;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px;color:#66758f">✕</button>
+ </div>
+ <p style="margin:0 0 16px;font-size:12px;color:#5a6b85">Enter your account details below to set a new password.</p>
+ <div class="login-field">
+ <label>Full Name</label>
+ <input class="login-input" id="r_fullname" placeholder="e.g. Juan Dela Cruz" autocomplete="name">
+ </div>
+ <div class="login-field">
+ <label>Role</label>
+ <select class="login-input" id="r_role">
+ <option value="1">Organizer</option>
+ <option value="2">Student Affairs</option>
+ <option value="3">Department Dean</option>
+ <option value="4">Finance</option>
+ <option value="5">School President</option>
+ <option value="6">System Administrator</option>
+ </select>
+ </div>
+ <div class="login-field">
+ <label>Username</label>
+ <input class="login-input" id="r_username" placeholder="e.g. juan123" autocomplete="username">
+ </div>
+ <div class="login-field">
+ <label>New Password</label>
+ <input class="login-input" id="r_newpw" type="password" placeholder="At least 6 characters">
+ <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:#5a6b85;font-weight:500;margin-top:7px;cursor:pointer"><input type="checkbox" onchange="document.getElementById('r_newpw').type=this.checked?'text':'password'"> Show password</label>
+ </div>
+ <div class="login-error" id="rError" style="display:none"></div>
+ <button class="login-button" id="rBtn" onclick="doRecovery()">Reset Password</button>
+ </div>
+</div>
+<script>
+// ============================================================
+// CONFIGURATION - Update these values if your API URL or token changes
+// ============================================================
+const API_URL = "https://script.google.com/macros/s/AKfycbxmVnEwu2Z0blYzK1xZFK75lbnwFEyPrF6VKIVBk8DXKwVrRUD4L5j8Fg2gfIAJhuvd/exec";
+const API_TOKEN = "SEPASSYSTEM2026";
+
+// Kung naka-login na daan, diretso sa dashboard
+if (localStorage.getItem("sepas_user")) {
+ window.location.href = "dashboard.html";
+}
+
+function toggleRecovery(){
+  const r=document.getElementById("recovery");
+  r.style.display=r.style.display==="none"?"flex":"none";
+  if(r.style.display==="flex"){document.getElementById("rError").style.display="none";}
+}
+async function doRecovery(){
+  const err=document.getElementById("rError");
+  const fullname=document.getElementById("r_fullname").value.trim();
+  const role=document.getElementById("r_role").value;
+  const username=document.getElementById("r_username").value.trim();
+  const newpw=document.getElementById("r_newpw").value;
+  if(!fullname||!username||!newpw){err.textContent="Please fill in all fields.";err.style.display="block";return;}
+  if(newpw.length<6){err.textContent="New password must be at least 6 characters.";err.style.display="block";return;}
+  const btn=document.getElementById("rBtn");btn.disabled=true;btn.textContent="Verifying...";
+  try{
+    const res=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({token:API_TOKEN,action:"reset_password",data:{full_name:fullname,role_id:role,username:username,new_password:newpw}})});
+    const data=await res.json();
+    if(data.success){
+      err.className="login-error";err.style.cssText="display:block;background:#e7f9f1;border-color:#00b894;color:#006644";
+      err.textContent="✅ "+data.message;
+      setTimeout(()=>{toggleRecovery();document.getElementById("r_fullname").value="";document.getElementById("r_username").value="";document.getElementById("r_newpw").value="";err.style.cssText="display:none";err.className="login-error";},2500);
+    }else{
+      err.className="login-error";err.style.cssText="display:block";
+      err.textContent="❌ "+(data.message||"Reset failed.");
+    }
+  }catch(e){err.className="login-error";err.style.cssText="display:block";err.textContent="❌ Connection failed. Please try again.";}
+  btn.disabled=false;btn.textContent="Reset Password";
+}
+const form = document.getElementById("loginForm");
+const errorBox = document.getElementById("errorBox");
+const loginBtn = document.getElementById("loginBtn");
+
+form.addEventListener("submit", async (e) => {
+ e.preventDefault();
+ errorBox.style.display = "none";
+ loginBtn.disabled = true;
+ loginBtn.textContent = "Signing in...";
+
+ const username = document.getElementById("username").value.trim();
+ const password = document.getElementById("password").value;
+
+ try {
+ // GAMIT POST imbis GET (mas compatible sa browsers gikan sa local file)
+ const res = await fetch(API_URL, {
+ method: "POST",
+ headers: { "Content-Type": "text/plain" },
+ body: JSON.stringify({ token: API_TOKEN, action: "login", username, password })
+ });
+ const data = await res.json();
+
+ if (data.success) {
+ // I-save ang user session (mu-replace sa PHP $_SESSION)
+ localStorage.setItem("sepas_user", JSON.stringify(data.user));
+ window.location.href = "dashboard.html";
+ } else {
+ showError(data.message || "Invalid username or password.");
+ }
+ } catch (err) {
+ // Show the actual error so we can see the real problem
+ console.error("Login error:", err);
+ const errMsg = err.message || String(err);
+ showError(
+ "<b>Connection failed.</b><br>" +
+ "<small style='color:#888'>Error: " + errMsg + "</small><br><br>" +
+ "<b>Possible reasons:</b><br>" +
+ "1. The browser blocked the connection (CORS issue)<br>" +
+ "2. The Web App is not deployed yet or was undeployed<br>" +
+ "3. The API URL is incorrect<br><br>" +
+ "<b>Try this:</b> Open the test page (SEPAS_test.html) to check if the API responds. If the test page works but login does not, the problem is in the login page code."
+ );
+ } finally {
+ loginBtn.disabled = false;
+ loginBtn.textContent = "Log In";
+ }
+});
+
+function showError(msg) {
+ errorBox.innerHTML = msg;
+ errorBox.style.display = "block";
+}
+</script>
+</body>
+</html>

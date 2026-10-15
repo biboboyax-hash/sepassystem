@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Budget &amp; Comments • SEPAS</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.prop-banner{display:flex;justify-content:space-between;align-items:center;gap:16px;background:linear-gradient(135deg,#101d52,#1c3a8f);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:16px}
+.prop-banner h2{margin:0;font-size:18px}
+.prop-banner .pb-meta{font-size:12px;color:#bcc9e8;margin-top:3px}
+.pb-total{text-align:right}
+.pb-total span{font-size:11px;color:#bcc9e8;display:block}
+.pb-total strong{font-size:24px}
+.tot-row{display:flex;justify-content:space-between;align-items:center;background:#e3ecff;border-radius:10px;padding:12px 16px;font-size:14px;font-weight:700;color:#1a3a8f;margin-top:12px}
+.comment{display:flex;gap:11px;margin-bottom:14px}
+.c-av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;flex:0 0 36px}
+.c-body{background:#f2f5fa;border-radius:12px;padding:10px 14px;flex:1}
+.c-meta{font-size:11px;color:var(--muted);margin-bottom:4px}
+.c-meta strong{color:var(--text)}
+.c-text{font-size:13px;line-height:1.55}
+.stat-chip{display:inline-block;padding:3px 11px;border-radius:999px;font-size:11px;font-weight:700;background:#e3ecff;color:var(--blue)}
+</style>
+</head>
+<body>
+<div class="shell" id="shell">
+ <aside class="sidebar">
+ <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+ <nav class="nav" id="nav"></nav>
+ <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+ </aside>
+ <main class="main">
+ <header class="top">
+ <div style="display:flex;align-items:center;gap:14px">
+ <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+ <div><h1 id="page-title">Budget &amp; Comments</h1><p id="page-sub">View proposal budgets and join the discussion.</p></div>
+ </div>
+ <a class="user-chip" href="settings.html"><span class="avatar" id="avatar">●</span><span><strong id="u-name"></strong><small id="u-role"></small></span></a>
+ </header>
+
+ <section class="card mb16">
+ <div class="field" style="margin-bottom:0"><label>Select Proposal</label>
+ <select class="inp" id="sel" onchange="selectP()"><option>Loading proposals...</option></select>
+ </div>
+ </section>
+
+ <div id="prop-banner-wrap"></div>
+
+ <div class="lower">
+ <section class="card">
+ <div class="section-head">
+ <div><h2>Budget Items</h2><p class="section-subtitle" id="b-sub">Choose a proposal above</p></div>
+ <button class="btn btn-primary" id="addItemBtn" onclick="showAddItem()" style="display:none">+ Add Item</button>
+ </div>
+ <div id="b-wrap"><div class="empty"><p>Select a proposal to view its budget items.</p></div></div>
+ </section>
+
+ <section class="card">
+ <div class="section-head"><div><h2>Discussion</h2><p class="section-subtitle" id="c-sub">Comments about this proposal</p></div></div>
+ <div id="c-wrap" style="max-height:360px;overflow-y:auto;margin-bottom:14px"><div class="empty"><p>No comments yet.</p></div></div>
+ <form id="cf"><div class="flex"><input class="inp" id="c_text" placeholder="Write a comment..." required style="flex:1"><button class="btn btn-primary" type="submit">Post</button></div></form>
+ </section>
+ </div>
+ </main>
+</div>
+<div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
+<script src="app.js"></script>
+<script>
+pageShell('workspace');
+let PROPS=[], ORGS=[], SEL=null, USERS=[], ITEMS=[];
+async function init(){
+ const [p,o,u]=await Promise.all([
+ api({action:"all",table:"event_proposals"}),
+ api({action:"all",table:"organizers"}),
+ api({action:"all",table:"users"})
+ ]);
+ PROPS=(Array.isArray(p)?p:[]).sort((a,b)=>String(b.submitted_at||'').localeCompare(String(a.submitted_at||'')));
+ ORGS=Array.isArray(o)?o:[]; USERS=Array.isArray(u)?u:[];
+ try{
+ ITEMS=await api({action:"all",table:"event_budget_items"});
+ if(!Array.isArray(ITEMS)) ITEMS=[];
+ }catch(e){
+ document.getElementById('sel').innerHTML='<option>⚠ Error loading budget items — please run checkTables + fixDatabase in Apps Script</option>';
+ throw e;
+ }
+ let visible=PROPS;
+ if(USER.role==='Organizer'){
+ const me=ORGS.find(x=>String(x.user_id)===String(USER.user_id));
+ visible=me?PROPS.filter(x=>String(x.organizer_id)===String(me.organizer_id)):[];
+ }
+ document.getElementById('sel').innerHTML = visible.length
+ ? '<option value="">— Choose a proposal —</option>'+visible.map(p=>'<option value="'+p.proposal_id+'">#'+p.proposal_id+' • '+esc(p.event_title)+' ('+esc(p.current_status)+')</option>').join('')
+ : '<option>No proposals available</option>';
+}
+const money = n => '₱' + Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const uname = id => { const u=USERS.find(x=>String(x.user_id)===String(id)); return u?u.full_name:('User #'+id); };
+const avColor = id => { const colors=['#2b64e8','#16a34a','#f59e0b','#8b5cf6','#ef4444','#0ea5e9']; return colors[Number(id)%colors.length]; };
+
+async function selectP(){
+ const id=document.getElementById('sel').value;
+ SEL=PROPS.find(x=>String(x.proposal_id)===String(id));
+ const bw=document.getElementById('prop-banner-wrap');
+ if(!SEL){ bw.innerHTML=''; document.getElementById('b-wrap').innerHTML='<div class="empty"><p>Select a proposal to view its budget items.</p></div>'; document.getElementById('c-wrap').innerHTML='<div class="empty"><p>No comments yet.</p></div>'; document.getElementById('addItemBtn').style.display='none'; document.getElementById('b-sub').textContent='Choose a proposal above'; return; }
+ bw.innerHTML='<div class="prop-banner"><div><h2>'+esc(SEL.event_title)+'</h2><div class="pb-meta">#'+esc(SEL.proposal_id)+' • '+esc(fmtDate(SEL.proposed_date))+' • '+esc(SEL.proposed_venue)+'</div></div><div class="pb-total"><span>Proposed Budget</span><strong>'+money(SEL.budget_amount)+'</strong><span class="stat-chip" style="margin-top:4px">'+esc(SEL.current_status)+'</span></div></div>';
+ loadBudget(); loadComments();
+ const mine=ORGS.some(o=>String(o.organizer_id)===String(SEL.organizer_id)&&String(o.user_id)===String(USER.user_id));
+ const canEdit = mine && !['Approved','Rejected'].includes(SEL.current_status);
+ document.getElementById('addItemBtn').style.display = canEdit ? 'inline-block' : 'none';
+ document.getElementById('c-sub').textContent = 'Comments about this proposal';
+}
+
+function renderBudget(){
+ const list=ITEMS.filter(x=>String(x.proposal_id)===String(SEL.proposal_id));
+ const total=list.reduce((s,x)=>s+(Number(x.quantity||1)*Number(x.unit_cost||0)),0);
+ document.getElementById('b-sub').textContent=list.length+' item'+(list.length===1?'':'s');
+ const w=document.getElementById('b-wrap');
+ if(!list.length){ w.innerHTML='<div class="empty"><p>No budget items yet.<br><span style="font-size:12px">'+ (document.getElementById('addItemBtn').style.display!=='none'?'Click "+ Add Item" to add the first one.':'No budget items have been added for this proposal yet.') +'</span></p></div>'; return; }
+ w.innerHTML='<table><thead><tr><th>Item</th><th>Description</th><th>Qty</th><th>Unit Cost</th><th>Total</th></tr></thead><tbody>'+
+ list.map(x=>{ const t=Number(x.quantity||1)*Number(x.unit_cost||0);
+ return '<tr><td><strong>'+esc(x.item_name)+'</strong></td><td class="muted">'+esc(x.description)+'</td><td>'+esc(x.quantity)+'</td><td>'+money(x.unit_cost)+'</td><td><strong>'+money(t)+'</strong></td></tr>';
+ }).join('')+
+ '</tbody></table><div class="tot-row"><span>GRAND TOTAL ('+list.length+' items)</span><span>'+money(total)+'</span></div>'+
+ (Number(SEL.budget_amount)>0 ? (total>Number(SEL.budget_amount)
+ ? '<div style="background:#fdeceb;border:1.5px solid #e74c3c;border-radius:8px;padding:10px 14px;font-size:12px;color:#992222;margin-top:8px;font-weight:600">⚠ BUDGET INSUFFICIENT! Items total '+money(total)+' exceeds proposed budget '+money(SEL.budget_amount)+'. Please revise the proposal to adjust the budget.</div>'
+ : '<p class="muted" style="font-size:11px;margin-top:8px"> Items total is within the proposed budget of '+money(SEL.budget_amount)+'.</p>') : '');
+}
+async function loadBudget(){
+ try{
+ ITEMS=await api({action:"all",table:"event_budget_items"});
+ if(!Array.isArray(ITEMS)) ITEMS=[];
+ }catch(e){
+ document.getElementById('sel').innerHTML='<option>⚠ Error loading budget items — please run checkTables + fixDatabase in Apps Script</option>';
+ throw e;
+ }
+ renderBudget();
+}
+
+async function loadComments(){
+ const rows=await api({action:"where",table:"proposal_comments",field:"proposal_id",value:String(SEL.proposal_id)});
+ const list=(Array.isArray(rows)?rows:[]).sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at)));
+ const w=document.getElementById('c-wrap');
+ // ===== COMMENT DELETE RULES (EXPLICIT) =====
+ // 1. Ang TANAN users (Organizer/Reviewer/Finance/President) — KAUGALINGON nga comment LANG
+ // 2. Ang ADMIN LANG — maka-delete sa TANAN nga comments
+ const canDeleteAll = USER.role==='System Administrator';
+ w.innerHTML=list.length?list.map(c=>{
+ const name=uname(c.user_id);
+ const isMyComment = String(c.user_id)===String(USER.user_id);
+ const showDelete = isMyComment || canDeleteAll;
+ const deleteTitle = canDeleteAll && !isMyComment ? 'Delete comment (admin)' : 'Delete my comment';
+ return '<div class="comment"><span class="c-av" style="background:'+avColor(c.user_id)+'">'+esc((name||'?').charAt(0).toUpperCase())+'</span>'+
+ '<div class="c-body"><div class="c-meta"><strong>'+esc(name)+'</strong> • '+esc(fmtDT(c.created_at))+
+ (showDelete?' <button onclick="delComment('+c.comment_id+')" title="'+deleteTitle+'" style="float:right;background:#fdeaea;color:#c0392b;border:none;border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:11px;line-height:1">🗑</button>':'')+
+ '</div><div class="c-text">'+esc(c.comment_text)+'</div></div></div>';
+ }).join(''):'<div class="empty"><p>No comments yet. Start the discussion!</p></div>';
+ w.scrollTop=99999;
+ document.getElementById('c-sub').textContent=list.length+' comment'+(list.length===1?'':'s');
+}
+
+document.getElementById('cf').addEventListener('submit',async e=>{
+ e.preventDefault();
+ if(!SEL){toast('Please choose a proposal first.',true);return;}
+ const t=document.getElementById('c_text').value.trim();
+ if(!t)return;
+ const btn=e.target.querySelector('button'); btn.disabled=true; btn.textContent='Posting...';
+ try{
+ const res=await api({action:"insert",table:"proposal_comments",data:{proposal_id:SEL.proposal_id,user_id:USER.user_id,comment_text:t,created_at:new Date().toISOString()}});
+ if(res && res.success){ document.getElementById('c_text').value=''; loadComments(); }
+ else toast('❌ Comment failed: '+((res&&res.message)||'Server error'),true);
+ }catch(err){ toast('❌ Connection error',true); }
+ btn.disabled=false; btn.textContent='Post';
+});
+
+function showAddItem(){
+ document.getElementById('modal-body').innerHTML=
+ '<button class="x" onclick="closeModal()">✕</button>'+
+ '<h2>Add Budget Item</h2><p class="muted" style="font-size:12px">Proposal #'+SEL.proposal_id+'</p>'+
+ '<div class="field" style="margin-top:14px"><label>Item Name *</label><input class="inp" id="bi_name" placeholder="e.g. Sound system rental"></div>'+
+ '<div class="field"><label>Description</label><input class="inp" id="bi_desc" placeholder="Optional details"></div>'+
+ '<div class="form-grid">'+
+ '<div class="field"><label>Quantity *</label><input class="inp" type="number" id="bi_qty" value="1" min="1"></div>'+
+ '<div class="field"><label>Unit Cost (₱) *</label><input class="inp" type="number" id="bi_cost" min="0" step="0.01" placeholder="0.00"></div>'+
+ '</div>'+
+ '<div class="form-actions">'+
+ '<button class="btn btn-primary" id="biBtn" onclick="saveItem()">Add Item</button>'+
+ '<button class="btn btn-outline" onclick="closeModal()">Cancel</button></div>';
+ document.getElementById('modal').classList.add('show');
+}
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
+async function saveItem(){
+ const b=document.getElementById('biBtn');
+ const name=document.getElementById('bi_name').value.trim();
+ const cost=document.getElementById('bi_cost').value;
+ if(!name||cost===''){toast('Please fill in item name and unit cost.',true);return;}
+ b.disabled=true;b.textContent='Saving...';
+ try{
+ const res=await api({action:"insert",table:"event_budget_items",data:{
+ proposal_id:SEL.proposal_id,item_name:name,
+ description:document.getElementById('bi_desc').value,
+ quantity:document.getElementById('bi_qty').value||1,
+ unit_cost:cost||0
+ }});
+ if(res && res.success){
+ closeModal(); toast('✅ Budget item added!'); loadBudget();
+ } else {
+ toast('❌ Save failed: '+((res&&res.message)||'Server error — check if event_budget_items sheet exists (run checkTables)'),true);
+ b.disabled=false;b.textContent='Add Item';
+ }
+ }catch(err){
+ toast('❌ Connection error: '+(err.message||err),true);
+ b.disabled=false;b.textContent='Add Item';
+ }
+}
+async function delComment(id){
+ // Safety: i-verify usab nga allowed gyud ni siya (own comment o president/admin)
+ const rows=await api({action:"where",table:"proposal_comments",field:"comment_id",value:String(id)});
+ const target=(Array.isArray(rows)?rows:[])[0];
+ if(!target){toast('Comment not found.',true);return;}
+ const isMyComment=String(target.user_id)===String(USER.user_id);
+ const isAdmin=USER.role==='System Administrator';
+ if(!isMyComment&&!isAdmin){toast(' You can only delete your OWN comments!',true);return;}
+ if(!confirm('Delete this comment? This cannot be undone.'))return;
+ try{
+ const res=await api({action:"delete",table:"proposal_comments",id:id});
+ if(res&&res.success){toast('🗑 Comment deleted from system and database.');loadComments();}
+ else toast('Delete failed: '+((res&&(res.message||res.error))||'server error'),true);
+ }catch(e){toast('Connection error.',true);}
+}
+init();
+</script>
+</body>
+</html>

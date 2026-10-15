@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Calendar • SEPAS</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell" id="shell">
+ <aside class="sidebar">
+ <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+ <nav class="nav" id="nav"></nav>
+ <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+ </aside>
+ <main class="main">
+ <header class="top">
+ <div style="display:flex;align-items:center;gap:14px">
+ <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+ <div><h1 id="page-title">Calendar</h1><p id="page-sub">Approved events at a glance.</p></div>
+ </div>
+ <a class="user-chip" href="settings.html">
+ <span class="avatar" id="avatar">●</span>
+ <span><strong id="u-name"></strong><small id="u-role"></small></span>
+ </a>
+ </header>
+ 
+<section class="card">
+ <div class="cal-head">
+ <h2 id="cal-title"></h2>
+ <div class="cal-nav">
+ <button onclick="move(-1)">← Prev</button>
+ <button onclick="goToday()">Today</button>
+ <button onclick="move(1)">Next →</button>
+ </div>
+ </div>
+ <div class="cal-grid" id="cal"></div>
+</section>
+<div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
+ </main>
+</div>
+<script src="app.js"></script>
+<script>
+pageShell('calendar');
+let EVENTS=[], view=new Date();
+async function load(){
+ const p=await api({action:"all",table:"event_proposals"});
+ EVENTS=(Array.isArray(p)?p:[]).filter(x=>x.current_status==='Approved');
+ draw();
+}
+function move(n){view.setMonth(view.getMonth()+n);draw();}
+function goToday(){view=new Date();draw();}
+function draw(){
+ const y=view.getFullYear(), m=view.getMonth();
+ document.getElementById('cal-title').textContent=view.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+ const first=new Date(y,m,1), startDay=(first.getDay()+6)%7, days=new Date(y,m+1,0).getDate();
+ const todayKey=dateKey(new Date());
+ let html=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div class="cal-dow">${d}</div>`).join('');
+ for(let i=0;i<startDay;i++) html+='<div class="cal-day dim"></div>';
+ for(let d=1;d<=days;d++){
+ const key=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+ const evs=EVENTS.filter(e=>dateKey(e.proposed_date)===key);
+ html+=`<div class="cal-day ${key===todayKey?'today':''}">
+ <span class="num">${d}</span>
+ ${evs.map(e=>`<div class="cal-ev" onclick="showEvent(${e.proposal_id})" title="${esc(e.event_title)}">${esc(e.event_title)}</div>`).join('')}
+ </div>`;
+ }
+ document.getElementById('cal').innerHTML=html;
+}
+function showEvent(id){
+ const e=EVENTS.find(x=>String(x.proposal_id)===String(id));if(!e)return;
+ document.getElementById('modal-body').innerHTML=`
+ <button class="x" onclick="document.getElementById('modal').classList.remove('show')">✕</button>
+ <span class="status status-approved">Approved</span>
+ <h2 style="margin-top:8px">${esc(e.event_title)}</h2>
+ <dl class="dl">
+ <dt>Date</dt><dd>${esc(fmtDate(e.proposed_date))}</dd>
+ <dt>Time</dt><dd>${esc(String(e.proposed_start_time||'').slice(0,5))} - ${esc(String(e.proposed_end_time||'').slice(0,5))}</dd>
+ <dt>Venue</dt><dd>${esc(e.proposed_venue)}</dd>
+ <dt>Budget</dt><dd>₱${Number(e.budget_amount||0).toLocaleString()}</dd>
+ </dl>`;
+ document.getElementById('modal').classList.add('show');
+}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')document.getElementById('modal').classList.remove('show');});
+load().catch(()=>{document.getElementById('cal').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
+</script>
+</body>
+</html>

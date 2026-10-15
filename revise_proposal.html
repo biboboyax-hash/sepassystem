@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Revise Proposal • SEPAS</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="shell" id="shell">
+ <aside class="sidebar">
+ <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+ <nav class="nav" id="nav"></nav>
+ <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+ </aside>
+ <main class="main">
+ <header class="top">
+ <div style="display:flex;align-items:center;gap:14px">
+ <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+ <div><h1 id="page-title">Revise Proposal</h1><p id="page-sub">Update and resubmit your returned proposal.</p></div>
+ </div>
+ <a class="user-chip" href="settings.html"><span class="avatar" id="avatar">●</span><span><strong id="u-name"></strong><small id="u-role"></small></span></a>
+ </header>
+ <section class="card" style="max-width:720px">
+ <div class="section-head"><div><h2>Revision Form</h2><p class="section-subtitle">Select a returned proposal, update the details, and resubmit.</p></div></div>
+ <div class="field"><label>Select Returned Proposal *</label><select class="inp" id="sel"><option>Loading...</option></select></div>
+ <div id="form-area" style="display:none">
+ <div class="note" style="background:#fff0e5;border-radius:10px;padding:12px 15px;font-size:12px;color:#8a4a12;margin-bottom:16px" id="rev-note"></div>
+ <form id="f">
+ <div class="field"><label>Event Title *</label><input class="inp" id="event_title" required></div>
+ <div class="field"><label>Description *</label><textarea class="inp" id="description" required></textarea></div>
+ <div class="field"><label>Purpose & Objectives *</label><textarea class="inp" id="purpose_objectives" required></textarea></div>
+ <div class="form-grid">
+ <div class="field"><label>Proposed Date *</label><input class="inp" type="date" id="proposed_date" required></div>
+ <div class="field"><label>Venue *</label><input class="inp" id="proposed_venue" required></div>
+ <div class="field"><label>Start Time *</label><input class="inp" type="time" id="proposed_start_time" required></div>
+ <div class="field"><label>End Time *</label><input class="inp" type="time" id="proposed_end_time" required></div>
+ <div class="field"><label>Budget Amount (₱) *</label><input class="inp" type="number" min="0" step="0.01" id="budget_amount" required oninput="updateBudgetTotal()"></div>
+ <div class="field"><label>Funding Source *</label><input class="inp" id="funding_source" required></div>
+ </div>
+ <div class="field">
+ <label>Itemized Budget <span style="font-weight:400;color:#8a94a8">(you may add, edit, or remove items)</span></label>
+ <div style="border:1.5px solid #dfe4ee;border-radius:10px;padding:14px;background:#fafbfd">
+ <div id="budget-rows"></div>
+ <button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:12px" onclick="addBudgetRow()">+ Add Budget Item</button>
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1.5px dashed #dfe4ee">
+ <strong style="font-size:13px">Items Total</strong>
+ <strong id="budget-total" style="font-size:16px;color:#2b64e8">₱0.00</strong>
+ </div>
+ <div id="budget-warn" style="display:none;background:#fdeceb;border:1.5px solid #e74c3c;border-radius:8px;padding:10px 14px;font-size:12px;color:#992222;margin-top:8px;font-weight:600"></div>
+ </div>
+ </div>
+ <div class="field"><label>Revision Reason *</label><textarea class="inp" id="revision_reason" required placeholder="What did you change and why?"></textarea></div>
+ <div class="field"><label>Revision Notes</label><textarea class="inp" id="revision_notes" placeholder="Additional notes for reviewers..."></textarea></div>
+ <div class="form-actions">
+ <button class="btn btn-primary" type="submit" id="subBtn">Resubmit Proposal</button>
+ <a class="btn btn-outline" href="proposals.html">Cancel</a>
+ </div>
+ </form>
+ </div>
+ </section>
+ </main>
+</div>
+<script src="app.js"></script>
+<script>
+pageShell('proposals');
+let PROPS=[], SEL=null;
+const q = new URLSearchParams(location.search);
+async function init(){
+ const [p,o]=await Promise.all([api({action:"all",table:"event_proposals"}),api({action:"all",table:"organizers"})]);
+ let all=Array.isArray(p)?p:[];
+ const me=(Array.isArray(o)?o:[]).find(x=>String(x.user_id)===String(USER.user_id));
+ if(me) all=all.filter(x=>String(x.organizer_id)===String(me.organizer_id));
+ PROPS=all.filter(x=>x.current_status==='Returned for Revision');
+ const sel=document.getElementById('sel');
+ if(!PROPS.length){sel.innerHTML='<option>No returned proposals</option>';return;}
+ sel.innerHTML='<option value="">— choose —</option>'+PROPS.map(x=>'<option value="'+x.proposal_id+'">#'+x.proposal_id+' '+esc(x.event_title)+'</option>').join('');
+ if(q.get('id')){sel.value=q.get('id');selectP();}
+}
+// ===== BUDGET ITEMS =====
+function addBudgetRow(name,desc,qty,cost){
+ const wrap=document.getElementById('budget-rows');
+ const row=document.createElement('div');
+ row.className='budget-row';
+ row.style.cssText='display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap';
+ row.innerHTML='<input class="inp" placeholder="Item name" value="'+(name||'')+'" style="flex:2;min-width:140px">'
+ +'<input class="inp" placeholder="Description (optional)" value="'+(desc||'')+'" style="flex:2;min-width:140px">'
+ +'<input class="inp bi-qty" type="number" value="'+(qty||1)+'" min="1" title="Quantity" style="width:70px" oninput="updateBudgetTotal()">'
+ +'<input class="inp bi-cost" type="number" min="0" step="0.01" placeholder="Unit cost" value="'+(cost??'')+'" title="Unit cost" style="width:115px" oninput="updateBudgetTotal()">'
+ +'<span class="bi-line" style="width:105px;font-size:13px;font-weight:700;color:#16a34a">₱0.00</span>'
+ +'<button type="button" onclick="this.parentElement.remove();updateBudgetTotal()" title="Remove item" style="background:#fdeaea;color:#c0392b;border:none;border-radius:7px;width:32px;height:36px;cursor:pointer;font-size:13px;flex:0 0 32px">✕</button>';
+ wrap.appendChild(row);
+ updateBudgetTotal();
+}
+function updateBudgetTotal(){
+ let total=0;
+ document.querySelectorAll('.budget-row').forEach(r=>{
+ const q=Number(r.querySelector('.bi-qty').value)||0;
+ const c=Number(r.querySelector('.bi-cost').value)||0;
+ r.querySelector('.bi-line').textContent='₱'+(q*c).toLocaleString(undefined,{minimumFractionDigits:2});
+ total+=q*c;
+ });
+ document.getElementById('budget-total').textContent='₱'+total.toLocaleString(undefined,{minimumFractionDigits:2});
+ const overall=Number(document.getElementById('budget_amount').value)||0;
+ const warn=document.getElementById('budget-warn');
+ if(overall>0 && total>overall){
+ warn.style.display='block';
+ warn.textContent='⚠ Budget insufficient! Items total (₱'+total.toLocaleString()+') exceeds proposed budget (₱'+overall.toLocaleString()+').';
+ } else { warn.style.display='none'; }
+}
+function collectBudgetItems(){
+ return [...document.querySelectorAll('.budget-row')].map(r=>({
+ item_name:r.querySelectorAll('input')[0].value.trim(),
+ description:r.querySelectorAll('input')[1].value.trim(),
+ quantity:r.querySelector('.bi-qty').value||1,
+ unit_cost:r.querySelector('.bi-cost').value||0
+ })).filter(i=>i.item_name);
+}
+async function loadBudgetRows(pid){
+ document.getElementById('budget-rows').innerHTML='';
+ const items=await api({action:"where",table:"event_budget_items",field:"proposal_id",value:String(pid)});
+ const list=Array.isArray(items)?items:[];
+ if(!list.length){addBudgetRow();}
+ else list.forEach(x=>addBudgetRow(x.item_name,x.description,x.quantity,x.unit_cost));
+}
+function selectP(){
+ const id=document.getElementById('sel').value;
+ SEL=PROPS.find(x=>String(x.proposal_id)===String(id));
+ if(!SEL){document.getElementById('form-area').style.display='none';return;}
+ document.getElementById('form-area').style.display='block';
+ const v=(id,val)=>document.getElementById(id).value=(val??'');
+ v('event_title',SEL.event_title);v('description',SEL.description);v('purpose_objectives',SEL.purpose_objectives);
+ v('proposed_date',String(SEL.proposed_date).slice(0,10));v('proposed_venue',SEL.proposed_venue);
+ v('proposed_start_time',String(SEL.proposed_start_time).slice(11,16)||String(SEL.proposed_start_time).slice(0,5));
+ v('proposed_end_time',String(SEL.proposed_end_time).slice(11,16)||String(SEL.proposed_end_time).slice(0,5));
+ v('budget_amount',SEL.budget_amount);v('funding_source',SEL.funding_source);
+ document.getElementById('rev-note').innerHTML='⚠ Status: <b>Returned for Revision</b> — please address the reviewer feedback in your revision.';
+ loadBudgetRows(SEL.proposal_id);
+}
+document.getElementById('sel').addEventListener('change',selectP);
+document.getElementById('f').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const b=document.getElementById('subBtn');b.disabled=true;b.textContent='Resubmitting...';
+ const val=id=>document.getElementById(id).value;
+ // BLOCK if items exceed budget
+ let itTotal=0;
+ document.querySelectorAll('.budget-row').forEach(r=>{itTotal+=(Number(r.querySelector('.bi-qty').value)||0)*(Number(r.querySelector('.bi-cost').value)||0);});
+ const ob=Number(val('budget_amount'))||0;
+ if(itTotal>ob){toast(' Cannot resubmit: items total ₱'+itTotal.toLocaleString()+' exceeds budget ₱'+ob.toLocaleString()+'.',true);b.disabled=false;b.textContent='Resubmit Proposal';return;}
+ try{
+ const r=await api({action:"submit_revision",data:{
+ proposal_id:SEL.proposal_id, revised_by:USER.user_id,
+ event_title:val('event_title'),description:val('description'),purpose_objectives:val('purpose_objectives'),
+ proposed_date:val('proposed_date'),proposed_venue:val('proposed_venue'),
+ proposed_start_time:val('proposed_start_time'),proposed_end_time:val('proposed_end_time'),
+ budget_amount:val('budget_amount'),funding_source:val('funding_source'),
+ revision_reason:val('revision_reason'),revision_notes:val('revision_notes'),
+ budget_items:collectBudgetItems()
+ }});
+ if(r.success){toast(' Revised! Back to Pending Review.');setTimeout(()=>location.href='proposals.html',1200);}
+ else{toast('Failed.',true);b.disabled=false;b.textContent='Resubmit Proposal';}
+ }catch(err){toast('Connection error.',true);b.disabled=false;b.textContent='Resubmit Proposal';}
+});
+init();
+</script>
+</body>
+</html>

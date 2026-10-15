@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>New Proposal • SEPAS</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell" id="shell">
+ <aside class="sidebar">
+ <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+ <nav class="nav" id="nav"></nav>
+ <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+ </aside>
+ <main class="main">
+ <header class="top">
+ <div style="display:flex;align-items:center;gap:14px">
+ <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+ <div><h1 id="page-title">New Proposal</h1><p id="page-sub">Submit a new event proposal for approval.</p></div>
+ </div>
+ <a class="user-chip" href="settings.html">
+ <span class="avatar" id="avatar">●</span>
+ <span><strong id="u-name"></strong><small id="u-role"></small></span>
+ </a>
+ </header>
+ 
+<section class="card" style="max-width:720px">
+ <div class="section-head"><div><h2>Event Proposal Form</h2><p class="section-subtitle">Fill in the event details below. Required fields are marked.</p></div></div>
+ <form id="f">
+ <div class="field"><label>Event Title *</label><input class="inp" id="event_title" required placeholder="e.g. Foundation Day Celebration"></div>
+ <div class="field"><label>Description *</label><textarea class="inp" id="description" required placeholder="Brief description of the event"></textarea></div>
+ <div class="field"><label>Purpose & Objectives *</label><textarea class="inp" id="purpose_objectives" required placeholder="What are the goals of this event?"></textarea></div>
+ <div class="form-grid">
+ <div class="field"><label>Proposed Date *</label><input class="inp" type="date" id="proposed_date" required></div>
+ <div class="field"><label>Venue *</label><input class="inp" id="proposed_venue" required placeholder="e.g. Main Gym"></div>
+ <div class="field"><label>Start Time *</label><input class="inp" type="time" id="proposed_start_time" required></div>
+ <div class="field"><label>End Time *</label><input class="inp" type="time" id="proposed_end_time" required></div>
+ <div class="field"><label>Budget Amount (₱) *</label><input class="inp" type="number" min="0" step="0.01" id="budget_amount" required placeholder="0.00" oninput="updateBudgetTotal()"></div>
+ <div class="field"><label>Funding Source *</label><input class="inp" id="funding_source" required placeholder="e.g. Student Organization Fund"></div>
+ <div class="field"><label>Event Category</label><select class="inp" id="category"><option>Academic</option><option>Sports</option><option>Cultural</option><option>Community</option><option>Religious</option><option>Others</option></select></div>
+ </div>
+ <div class="field"><label>Event Requirements</label><textarea class="inp" id="requirements" placeholder="Equipment, permits, manpower needed..."></textarea></div>
+ <div class="field">
+ <label>Itemized Budget <span style="font-weight:400;color:#8a94a8">(optional — breakdown of the total above)</span></label>
+ <div style="border:1.5px solid #dfe4ee;border-radius:10px;padding:14px;background:#fafbfd">
+ <div id="budget-rows"></div>
+ <button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:12px" onclick="addBudgetRow()">+ Add Budget Item</button>
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1.5px dashed #dfe4ee">
+ <strong style="font-size:13px">Items Total</strong>
+ <strong id="budget-total" style="font-size:16px;color:#2b64e8">₱0.00</strong>
+ </div>
+ <div id="budget-warn" style="display:none;background:#fdeceb;border:1.5px solid #e74c3c;border-radius:8px;padding:10px 14px;font-size:12px;color:#992222;margin-top:8px">
+ <div id="budget-warn-text" style="font-weight:600"></div>
+ <button type="button" onclick="useItemsAsBudget()" style="margin-top:8px;background:#2b64e8;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✨ Use items total as my budget</button>
+ </div>
+ </div>
+ </div>
+ <div class="field"><label>Supporting Documents (optional — max 10MB each)</label>
+ <input class="inp" type="file" id="docs" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx,.ppt,.pptx,.txt">
+ <div id="file-list" class="muted" style="font-size:12px;margin-top:6px"></div>
+ </div>
+ <div class="form-actions">
+ <button class="btn btn-primary" type="submit" id="submitBtn">Submit Proposal</button>
+ <a class="btn btn-outline" href="proposals.html">Cancel</a>
+ </div>
+ </form>
+</section>
+ </main>
+</div>
+<script src="app.js"></script>
+<script>
+pageShell('create');
+// ===== BUDGET ITEMS =====
+function addBudgetRow(){
+ const wrap=document.getElementById('budget-rows');
+ const row=document.createElement('div');
+ row.className='budget-row';
+ row.style.cssText='display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap';
+ row.innerHTML='<input class="inp" placeholder="Item name (e.g. Sound system)" style="flex:2;min-width:140px">'
+ +'<input class="inp" placeholder="Description (optional)" style="flex:2;min-width:140px">'
+ +'<input class="inp bi-qty" type="number" value="1" min="1" title="Quantity" style="width:70px" oninput="updateBudgetTotal()">'
+ +'<input class="inp bi-cost" type="number" min="0" step="0.01" placeholder="Unit cost" title="Unit cost" style="width:115px" oninput="updateBudgetTotal()">'
+ +'<span class="bi-line" style="width:105px;font-size:13px;font-weight:700;color:#16a34a">₱0.00</span>'
+ +'<button type="button" onclick="this.parentElement.remove();updateBudgetTotal()" title="Remove item" style="background:#fdeaea;color:#c0392b;border:none;border-radius:7px;width:32px;height:36px;cursor:pointer;font-size:13px;flex:0 0 32px">✕</button>';
+ wrap.appendChild(row);
+ updateBudgetTotal();
+}
+function updateBudgetTotal(){
+ let total=0;
+ document.querySelectorAll('.budget-row').forEach(r=>{
+ const q=Number(r.querySelector('.bi-qty').value)||0;
+ const c=Number(r.querySelector('.bi-cost').value)||0;
+ r.querySelector('.bi-line').textContent='₱'+(q*c).toLocaleString(undefined,{minimumFractionDigits:2});
+ total+=q*c;
+ });
+ document.getElementById('budget-total').textContent='₱'+total.toLocaleString(undefined,{minimumFractionDigits:2});
+ // Compare with overall budget
+ const overall=Number(document.getElementById('budget_amount').value)||0;
+ const warn=document.getElementById('budget-warn');
+ if(overall>0 && total>overall){
+ warn.style.display='block';
+ document.getElementById('budget-warn-text').textContent='⚠ Budget insufficient! Items total (₱'+total.toLocaleString()+') exceeds your proposed budget (₱'+overall.toLocaleString()+'). Please increase the budget or remove some items.';
+ } else { warn.style.display='none'; }
+}
+function useItemsAsBudget(){
+ let total=0;
+ document.querySelectorAll('.budget-row').forEach(r=>{
+ total+=(Number(r.querySelector('.bi-qty').value)||0)*(Number(r.querySelector('.bi-cost').value)||0);
+ });
+ document.getElementById('budget_amount').value=total.toFixed(2);
+ updateBudgetTotal();
+ toast('✅ Budget updated to match items total!');
+}
+function collectBudgetItems(){
+ return [...document.querySelectorAll('.budget-row')].map(r=>({
+ item_name:r.querySelectorAll('input')[0].value.trim(),
+ description:r.querySelectorAll('input')[1].value.trim(),
+ quantity:r.querySelector('.bi-qty').value||1,
+ unit_cost:r.querySelector('.bi-cost').value||0
+ })).filter(i=>i.item_name);
+}
+addBudgetRow(); // start with one empty row
+
+function readFileAsBase64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});}
+document.getElementById('docs').addEventListener('change',e=>{
+ document.getElementById('file-list').textContent=[...e.target.files].map(f=>'» '+f.name+' ('+(f.size/1024).toFixed(0)+' KB)').join(' • ');
+});
+document.getElementById('f').addEventListener('submit', async e => {
+ e.preventDefault();
+ const btn = document.getElementById('submitBtn');
+ btn.disabled = true; btn.textContent = 'Submitting...';
+ try {
+ const orgs = await api({action:"all",table:"organizers"});
+ const me = (Array.isArray(orgs)?orgs:[]).find(o=>String(o.user_id)===String(USER.user_id));
+ if (!me) { toast('No organizer record found for your account. Please ask the admin to add one.', true); btn.disabled=false; btn.textContent='Submit Proposal'; return; }
+ const val = id => document.getElementById(id).value;
+ // Upload files to Drive first
+ const uploadedDocs = [];
+ const fileInput = document.getElementById('docs');
+ if (fileInput && fileInput.files.length) {
+ btn.textContent = 'Uploading ' + fileInput.files.length + ' file(s)...';
+ for (const file of fileInput.files) {
+ if (file.size > 10*1024*1024) { toast('File too large: ' + file.name + ' (max 10MB)', true); btn.disabled=false; btn.textContent='Submit Proposal'; return; }
+ const base64 = await readFileAsBase64(file);
+ const up = await api({action:"upload_file", data:{base64:base64, filename:file.name, mimeType:file.type||'application/octet-stream'}});
+ if (up.success) uploadedDocs.push({document_name: file.name, file_path: up.url});
+ else { toast('Upload failed: ' + (up.message || file.name), true); btn.disabled=false; btn.textContent='Submit Proposal'; return; }
+ }
+ btn.textContent = 'Submitting...';
+ }
+ // BLOCK if items total exceeds proposed budget
+ let itemsTotal=0;
+ document.querySelectorAll('.budget-row').forEach(r=>{
+ itemsTotal+=(Number(r.querySelector('.bi-qty').value)||0)*(Number(r.querySelector('.bi-cost').value)||0);
+ });
+ const overallBudget=Number(val('budget_amount'))||0;
+ if(itemsTotal>overallBudget){
+ toast('❌ Cannot submit: items total ₱'+itemsTotal.toLocaleString()+' exceeds budget ₱'+overallBudget.toLocaleString()+'. Fix it first or click "Use items total as my budget".', true);
+ btn.disabled=false; btn.textContent='Submit Proposal';
+ document.getElementById('budget_amount').focus();
+ return;
+ }
+ const r = await api({ action:"submit_proposal", user_id:USER.user_id, data:{
+ organizer_id: me.organizer_id,
+ event_title: val('event_title'), description: val('description'),
+ purpose_objectives: val('purpose_objectives'),
+ proposed_date: val('proposed_date'), proposed_venue: val('proposed_venue'),
+ proposed_start_time: val('proposed_start_time'), proposed_end_time: val('proposed_end_time'),
+ budget_amount: val('budget_amount'), funding_source: val('funding_source'),
+ category: val('category'),
+ requirements: val('requirements'),
+ documents: uploadedDocs,
+ budget_items: collectBudgetItems()
+ }});
+ if (r.success) { toast('✅ Proposal submitted! ID #' + r.proposal_id); setTimeout(()=>location.href='proposals.html', 1200); }
+ else { toast('Submit failed.', true); btn.disabled=false; btn.textContent='Submit Proposal'; }
+ } catch(err) { toast('Connection error.', true); btn.disabled=false; btn.textContent='Submit Proposal'; }
+});
+</script>
+</body>
+</html>
