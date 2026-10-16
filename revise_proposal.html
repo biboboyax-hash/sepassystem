@@ -33,6 +33,7 @@
  <div class="field"><label>End Time *</label><input class="inp" type="time" id="proposed_end_time" required></div>
  <div class="field"><label>Budget Amount (₱) *</label><input class="inp" type="number" min="0" step="0.01" id="budget_amount" required oninput="updateBudgetTotal()"></div>
  <div class="field"><label>Funding Source *</label><input class="inp" id="funding_source" required></div>
+ <div class="field"><label>Event Category</label><select class="inp" id="category"><option>Academic</option><option>Sports</option><option>Cultural</option><option>Community</option><option>Religious</option><option>Others</option></select></div>
  </div>
  <div class="field">
  <label>Itemized Budget <span style="font-weight:400;color:#8a94a8">(you may add, edit, or remove items)</span></label>
@@ -45,6 +46,13 @@
  </div>
  <div id="budget-warn" style="display:none;background:#fdeceb;border:1.5px solid #e74c3c;border-radius:8px;padding:10px 14px;font-size:12px;color:#992222;margin-top:8px;font-weight:600"></div>
  </div>
+ </div>
+ <div class="field"><label>Event Requirements</label><textarea class="inp" id="requirements" placeholder="Equipment, permits, manpower needed..."></textarea></div>
+ <div class="field">
+ <label>Supporting Documents <span style="font-weight:400;color:#8a94a8">(optional — max 10MB each; new files will be added to existing ones)</span></label>
+ <input class="inp" type="file" id="rev-docs" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx,.ppt,.pptx,.txt">
+ <div id="rev-file-list" class="muted" style="font-size:12px;margin-top:6px"></div>
+ <div id="rev-existing-docs" style="margin-top:8px"></div>
  </div>
  <div class="field"><label>Revision Reason *</label><textarea class="inp" id="revision_reason" required placeholder="What did you change and why?"></textarea></div>
  <div class="field"><label>Revision Notes</label><textarea class="inp" id="revision_notes" placeholder="Additional notes for reviewers..."></textarea></div>
@@ -73,6 +81,10 @@ async function init(){
  sel.innerHTML='<option value="">— choose —</option>'+PROPS.map(x=>'<option value="'+x.proposal_id+'">#'+x.proposal_id+' '+esc(x.event_title)+'</option>').join('');
  if(q.get('id')){sel.value=q.get('id');selectP();}
 }
+function readFileAsBase64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});}
+document.getElementById('rev-docs').addEventListener('change',e=>{
+ document.getElementById('rev-file-list').textContent=[...e.target.files].map(f=>'📎 '+f.name+' ('+(f.size/1024).toFixed(0)+' KB)').join('  •  ');
+});
 // ===== BUDGET ITEMS =====
 function addBudgetRow(name,desc,qty,cost){
  const wrap=document.getElementById('budget-rows');
@@ -118,6 +130,16 @@ async function loadBudgetRows(pid){
  const list=Array.isArray(items)?items:[];
  if(!list.length){addBudgetRow();}
  else list.forEach(x=>addBudgetRow(x.item_name,x.description,x.quantity,x.unit_cost));
+ // Load existing requirements
+ const reqs=await api({action:"where",table:"proposal_requirements",field:"proposal_id",value:String(pid)});
+ const rList=Array.isArray(reqs)?reqs:[];
+ document.getElementById('requirements').value=rList.length?(rList[0].description||''):'';
+ // Show existing documents
+ const docs=await api({action:"where",table:"proposal_documents",field:"proposal_id",value:String(pid)});
+ const dList=Array.isArray(docs)?docs:[];
+ document.getElementById('rev-existing-docs').innerHTML=dList.length?
+  '<p style="font-size:11px;color:#16a34a;font-weight:600;margin:0 0 4px">Already attached ('+dList.length+'):</p>'+dList.map(d=>'<div style="font-size:11px;padding:2px 0">📎 <a href="'+esc(d.file_path)+'" target="_blank" style="color:var(--blue)">'+esc(d.document_name)+'</a></div>').join(''):
+  '<p class="muted" style="font-size:11px;margin:0">No documents attached yet.</p>';
 }
 function selectP(){
  const id=document.getElementById('sel').value;
@@ -130,6 +152,7 @@ function selectP(){
  v('proposed_start_time',String(SEL.proposed_start_time).slice(11,16)||String(SEL.proposed_start_time).slice(0,5));
  v('proposed_end_time',String(SEL.proposed_end_time).slice(11,16)||String(SEL.proposed_end_time).slice(0,5));
  v('budget_amount',SEL.budget_amount);v('funding_source',SEL.funding_source);
+ if(SEL.category)document.getElementById('category').value=SEL.category;
  document.getElementById('rev-note').innerHTML='⚠ Status: <b>Returned for Revision</b> — please address the reviewer feedback in your revision.';
  loadBudgetRows(SEL.proposal_id);
 }
@@ -144,12 +167,30 @@ document.getElementById('f').addEventListener('submit',async e=>{
  const ob=Number(val('budget_amount'))||0;
  if(itTotal>ob){toast(' Cannot resubmit: items total ₱'+itTotal.toLocaleString()+' exceeds budget ₱'+ob.toLocaleString()+'.',true);b.disabled=false;b.textContent='Resubmit Proposal';return;}
  try{
+ // Upload new files first (if any are attached)
+ const revFileInput=document.getElementById('rev-docs');
+ if(revFileInput&&revFileInput.files.length){
+  b.textContent='Uploading '+revFileInput.files.length+' file(s)...';
+  for(const file of revFileInput.files){
+   if(file.size>10*1024*1024){toast('File too large: '+file.name+' (max 10MB)',true);b.disabled=false;b.textContent='Resubmit Proposal';return;}
+   const base64=await readFileAsBase64(file);
+   const up=await api({action:"upload_file",data:{base64:base64,filename:file.name,mimeType:file.type||'application/octet-stream'}});
+   if(up&&up.success){
+    await api({action:"insert",table:"proposal_documents",data:{proposal_id:SEL.proposal_id,document_name:file.name,file_path:up.url,uploaded_by:USER.user_id,uploaded_at:new Date().toISOString()}});
+   } else {
+    toast('Upload failed: '+file.name,true);b.disabled=false;b.textContent='Resubmit Proposal';return;
+   }
+  }
+  b.textContent='Resubmitting...';
+ }
  const r=await api({action:"submit_revision",data:{
  proposal_id:SEL.proposal_id, revised_by:USER.user_id,
  event_title:val('event_title'),description:val('description'),purpose_objectives:val('purpose_objectives'),
  proposed_date:val('proposed_date'),proposed_venue:val('proposed_venue'),
  proposed_start_time:val('proposed_start_time'),proposed_end_time:val('proposed_end_time'),
  budget_amount:val('budget_amount'),funding_source:val('funding_source'),
+ category:val('category'),
+ requirements:val('requirements'),
  revision_reason:val('revision_reason'),revision_notes:val('revision_notes'),
  budget_items:collectBudgetItems()
  }});

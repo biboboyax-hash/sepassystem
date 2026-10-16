@@ -140,8 +140,8 @@ async function loadComments(){
  const list=(Array.isArray(rows)?rows:[]).sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at)));
  const w=document.getElementById('c-wrap');
  // ===== COMMENT DELETE RULES (EXPLICIT) =====
- // 1. Ang TANAN users (Organizer/Reviewer/Finance/President) — KAUGALINGON nga comment LANG
- // 2. Ang ADMIN LANG — maka-delete sa TANAN nga comments
+ // 1. ALL users (Organizer/Reviewer/Finance/President) — can delete their OWN comment ONLY
+ // 2. The ADMIN ONLY — can delete ALL comments
  const canDeleteAll = USER.role==='System Administrator';
  w.innerHTML=list.length?list.map(c=>{
  const name=uname(c.user_id);
@@ -213,7 +213,7 @@ async function saveItem(){
  }
 }
 async function delComment(id){
- // Safety: i-verify usab nga allowed gyud ni siya (own comment o president/admin)
+ // Safety: verify again that this is allowed (own comment or president/admin)
  const rows=await api({action:"where",table:"proposal_comments",field:"comment_id",value:String(id)});
  const target=(Array.isArray(rows)?rows:[])[0];
  if(!target){toast('Comment not found.',true);return;}

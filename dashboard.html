@@ -200,7 +200,7 @@ function logout() {
 }
 
 // ------------------------------------------------------------
-// SIDEBAR (base sa role, parehas sa PHP version)
+// SIDEBAR (role-based, same as the PHP version)
 // ------------------------------------------------------------
 function buildNav() {
  const links = [['dashboard','Dashboard','dashboard.html','▦',true]];
@@ -217,7 +217,7 @@ function buildNav() {
 }
 
 // ------------------------------------------------------------
-// API HELPER (POST ra, para dili ma-block sa browser)
+// API HELPER (POST only, so it won't be blocked by the browser)
 // ------------------------------------------------------------
 async function api(body) {
  const res = await fetch(API_URL, {

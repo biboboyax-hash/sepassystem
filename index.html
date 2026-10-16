@@ -136,7 +136,7 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,
 const API_URL = "https://script.google.com/macros/s/AKfycbxmVnEwu2Z0blYzK1xZFK75lbnwFEyPrF6VKIVBk8DXKwVrRUD4L5j8Fg2gfIAJhuvd/exec";
 const API_TOKEN = "SEPASSYSTEM2026";
 
-// Kung naka-login na daan, diretso sa dashboard
+// If already logged in, go straight to dashboard
 if (localStorage.getItem("sepas_user")) {
  window.location.href = "dashboard.html";
 }
