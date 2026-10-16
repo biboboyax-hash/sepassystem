@@ -1,119 +1,125 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Final Approval • SEPAS</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div class="shell" id="shell">
- <aside class="sidebar">
- <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
- <nav class="nav" id="nav"></nav>
- <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
- </aside>
- <main class="main">
- <header class="top">
- <div style="display:flex;align-items:center;gap:14px">
- <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
- <div><h1 id="page-title">Final Approval</h1><p id="page-sub">Provide final decision on proposals.</p></div>
- </div>
- <a class="user-chip" href="settings.html">
- <span class="avatar" id="avatar">●</span>
- <span><strong id="u-name"></strong><small id="u-role"></small></span>
- </a>
- </header>
- 
-<section class="card">
- <div class="section-head"><div><h2>Awaiting Final Decision</h2><p class="section-subtitle" id="tbl-count"></p></div></div>
- <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
-</section>
-<div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
- </main>
-</div>
-<script src="app.js"></script>
-<script>
-pageShell('approval');
-let ALL=[], ORGS=[], MYAPP=[];
-async function load(){
- const [p,o,a,revs]=await Promise.all([
- api({action:"all",table:"event_proposals"}),
- api({action:"all",table:"organizers"}),
- api({action:"where",table:"final_approvals",field:"approver_id",value:String(USER.user_id)}),
- api({action:"all",table:"proposal_revisions"})
- ]);
- ALL=Array.isArray(p)?p:[];ORGS=Array.isArray(o)?o:[];MYAPP=Array.isArray(a)?a:[];REVS=Array.isArray(revs)?revs:[];
- const latest={};
- MYAPP.forEach(r=>{const k=String(r.proposal_id);if(!latest[k]||String(r.approved_at)>String(latest[k].approved_at))latest[k]=r;});
- const items=ALL.filter(p=>['Final Approval','Awaiting Final Approval'].includes(p.current_status)&&(!latest[String(p.proposal_id)]||String(latest[String(p.proposal_id)].decision)==='Returned for Revision'));
- document.getElementById('tbl-count').textContent=items.length+' proposal'+(items.length===1?'':'s');
- const w=document.getElementById('wrap');
- if(!items.length){w.innerHTML='<div class="empty"><p>No proposals awaiting final decision. </p></div>';return;}
- w.innerHTML=`<table><thead><tr><th>Event</th><th>Organizer</th><th>Date</th><th>Budget</th><th></th></tr></thead><tbody>${
- items.map(p=>`<tr>
- <td><strong>${esc(p.event_title)}</strong><small>#${esc(p.proposal_id)}</small>${REVS.some(r=>String(r.proposal_id)===String(p.proposal_id))?' <span class="status status-returned" style="font-size:9px;padding:2px 8px;margin-left:4px">REVISED</span>':''}</td>
- <td>${esc(orgName(p.organizer_id))}</td>
- <td>${esc(fmtDate(p.proposed_date))}</td>
- <td>₱${Number(p.budget_amount||0).toLocaleString()}</td>
- <td><button class="btn btn-primary" style="padding:6px 13px" onclick="openFinal(${p.proposal_id})">Decide</button></td>
- </tr>`).join('')}</tbody></table>`;
-}
-const orgName=id=>{const o=ORGS.find(x=>String(x.organizer_id)===String(id));return o?o.organization_name:('#'+id);};
-async function openFinal(id){
- const p=ALL.find(x=>String(x.proposal_id)===String(id));if(!p)return;
- const [revs,fins,docs,prevs]=await Promise.all([
- api({action:"where",table:"proposal_reviews",field:"proposal_id",value:String(id)}),
- api({action:"where",table:"financial_reviews",field:"proposal_id",value:String(id)}),
- api({action:"where",table:"proposal_documents",field:"proposal_id",value:String(id)}),
- api({action:"where",table:"proposal_revisions",field:"proposal_id",value:String(id)})
- ]);
- const docList=Array.isArray(docs)?docs:[];
- const prevsList=(Array.isArray(prevs)?prevs:[]).sort((a,b)=>String(b.submitted_at).localeCompare(String(a.submitted_at)));
- const rv=Array.isArray(revs)?revs:[], fn=Array.isArray(fins)?fins:[];
- document.getElementById('modal-body').innerHTML=`
- <button class="x" onclick="closeModal()">✕</button>
- <span class="status status-pending">Final Approval Stage</span>
- <h2 style="margin-top:8px">${esc(p.event_title)}</h2>
- <p class="muted" style="font-size:12px">${esc(orgName(p.organizer_id))} • ${esc(fmtDate(p.proposed_date))} • ${esc(p.proposed_venue)}</p>
- <dl class="dl">
- <dt>Objectives</dt><dd>${esc(p.purpose_objectives)}</dd>
- <dt>Budget</dt><dd>₱${Number(p.budget_amount||0).toLocaleString()} (${esc(p.funding_source)})</dd>
- </dl>
- <h3 style="font-size:13px;margin:10px 0 6px">Prior Reviews</h3>
- ${rv.length?rv.map(x=>`<div style="font-size:12px;padding:6px 0;border-bottom:1px solid #eef1f6"><span class="status ${statusClass(x.decision)}" style="font-size:10px">${esc(x.decision)}</span> <span class="muted">${esc(x.review_type)}: ${esc(x.comments)}</span></div>`).join(''):'<p class="muted" style="font-size:12px">No prior reviews recorded.</p>'}
- ${fn.length?`<div style="font-size:12px;padding:6px 0"><span class="status ${statusClass(fn[0].decision)}" style="font-size:10px">${esc(fn[0].decision)}</span> <span class="muted">Finance: budget ₱${Number(fn[0].budget_amount||0).toLocaleString()}</span></div>`:''}
- ${prevsList.length?`<h3 style="font-size:13px;margin:12px 0 6px">Revision History (gi-revise sa organizer)</h3>${prevsList.map(rv=>`<div style="font-size:12px;padding:7px 10px;background:#fff7ed;border-left:3px solid #f97316;border-radius:6px;margin-bottom:6px"><strong>Revision #${esc(rv.revision_number)}</strong> — ${esc(rv.revision_reason)}${rv.revision_notes?` <span class="muted">(${esc(rv.revision_notes)})</span>`:''}<br><span class="muted">${esc(fmtDT(rv.submitted_at))}</span></div>`).join('')}`:''}
- ${docList.length?`<h3 style="font-size:13px;margin:12px 0 6px">Attached Documents</h3>${docList.map(d=>`<div style="font-size:13px;padding:4px 0">» <a href="${esc(d.file_path)}" target="_blank" style="color:var(--blue);font-weight:600">${esc(d.document_name)}</a></div>`).join('')}`:''}
- <div class="field" style="margin-top:14px"><label>Final Decision *</label>
- <select class="inp" id="fa_decision"><option value="Approved"> Approve — event is go!</option><option value="Returned for Revision">↩ Return for Revision</option><option value="Rejected"> Reject</option></select>
- </div>
- <div class="field"><label>Comments</label><textarea class="inp" id="fa_comments" placeholder="Final remarks..."></textarea></div>
- <div class="form-actions">
- <button class="btn btn-primary" id="faBtn" onclick="submitFinal(${id})">Submit Final Decision</button>
- <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
- </div>`;
- document.getElementById('modal').classList.add('show');
-}
-function closeModal(){document.getElementById('modal').classList.remove('show');}
-document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
-async function submitFinal(id){
- const dec=document.getElementById('fa_decision').value;
- const com=document.getElementById('fa_comments').value.trim();
- if((dec==='Returned for Revision'||dec==='Rejected')&&!com){toast('Comments are required.',true);return;}
- const btn=document.getElementById('faBtn');btn.disabled=true;btn.textContent='Submitting...';
- try{
- const r=await api({action:"final_approval",data:{
- proposal_id:id, approver_id:USER.user_id,
- decision:dec,
- comments:com
- }});
- if(r.success){toast('Final decision submitted! Status: '+r.new_status);closeModal();load();}
- else{toast('Failed.',true);btn.disabled=false;btn.textContent='Submit Final Decision';}
- }catch(e){toast('Connection error.',true);btn.disabled=false;btn.textContent='Submit Final Decision';}
-}
-load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
-setInterval(function(){if(document.visibilityState==='visible')load();},60000); // auto-refresh
-</script>
-</body>
-</html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Final Approval • SEPAS</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <aside class="sidebar">
+        <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+        <nav class="nav" id="nav"></nav>
+        <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+      </aside>
+      <main class="main">
+        <header class="top">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+            <div><h1 id="page-title">Final Approval</h1><p id="page-sub">Provide final decision on proposals.</p></div>
+          </div>
+          <a class="user-chip" href="settings.html">
+            <span class="avatar" id="avatar">●</span>
+            <span><strong id="u-name"></strong><small id="u-role"></small></span>
+          </a>
+        </header>
+
+        <section class="card">
+          <div class="section-head"><div><h2>Awaiting Final Decision</h2><p class="section-subtitle" id="tbl-count"></p></div></div>
+          <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
+        </section>
+        <div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
+      </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+      pageShell('approval');
+      let ALL=[], ORGS=[], MYAPP=[];
+      function showLoad(){const w=document.getElementById('wrap');if(w)w.innerHTML='<div class="loading-wrap"><div class="spin"></div>Loading...</div>';}
+      async function load(){
+        showLoad();
+        const [p,o,a,revs,us]=await Promise.all([
+        api({action:"all",table:"event_proposals"}),
+        api({action:"all",table:"organizers"}),
+        api({action:"where",table:"final_approvals",field:"approver_id",value:String(USER.user_id)}),
+        api({action:"all",table:"proposal_revisions"}),
+        api({action:"all",table:"users"})
+        ]);
+        ALL=Array.isArray(p)?p:[];ORGS=Array.isArray(o)?o:[];MYAPP=Array.isArray(a)?a:[];REVS=Array.isArray(revs)?revs:[]; USERS=Array.isArray(us)?us:[];
+        const latest={};
+        MYAPP.forEach(r=>{const k=String(r.proposal_id);if(!latest[k]||String(r.approved_at)>String(latest[k].approved_at))latest[k]=r;});
+        const items=ALL.filter(p=>['Final Approval','Awaiting Final Approval'].includes(p.current_status)&&(!latest[String(p.proposal_id)]||String(latest[String(p.proposal_id)].decision)==='Returned for Revision'));
+        document.getElementById('tbl-count').textContent=items.length+' proposal'+(items.length===1?'':'s');
+        const w=document.getElementById('wrap');
+        if(!items.length){w.innerHTML='<div class="empty"><p>No proposals awaiting final decision. </p></div>';return;}
+        w.innerHTML=`<table><thead><tr><th>Event</th><th>Organizer</th><th>Date</th><th>Budget</th><th></th></tr></thead><tbody>${
+          items.map(p=>`<tr>
+          <td><strong>${esc(p.event_title)}</strong><small>#${esc(p.proposal_id)}</small>${REVS.some(r=>String(r.proposal_id)===String(p.proposal_id))?' <span class="status status-returned" style="font-size:9px;padding:2px 8px;margin-left:4px">REVISED</span>':''}</td>
+          <td>${esc(orgName(p.organizer_id))}</td>
+          <td>${esc(fmtDate(p.proposed_date))}</td>
+          <td>₱${Number(p.budget_amount||0).toLocaleString()}</td>
+          <td><button class="btn btn-primary" style="padding:6px 13px" onclick="openFinal(${p.proposal_id},this)">Decide</button></td>
+          </tr>`).join('')}</tbody></table>`;
+      }
+      let USERS=[];
+      const uname=id=>{const u=USERS.find(x=>String(x.user_id)===String(id));return u?u.full_name:('User #'+id);};
+      const orgName=id=>{const o=ORGS.find(x=>String(x.organizer_id)===String(id));return o?o.organization_name:('#'+id);};
+      async function openFinal(id,btn){
+        if(btn){btn.disabled=true;btn.textContent='⏳';}
+        const p=ALL.find(x=>String(x.proposal_id)===String(id));if(!p)return;
+        const [revs,fins,docs,prevs]=await Promise.all([
+        api({action:"where",table:"proposal_reviews",field:"proposal_id",value:String(id)}),
+        api({action:"where",table:"financial_reviews",field:"proposal_id",value:String(id)}),
+        api({action:"where",table:"proposal_documents",field:"proposal_id",value:String(id)}),
+        api({action:"where",table:"proposal_revisions",field:"proposal_id",value:String(id)})
+        ]);
+        const docList=Array.isArray(docs)?docs:[];
+        const prevsList=(Array.isArray(prevs)?prevs:[]).sort((a,b)=>String(b.submitted_at).localeCompare(String(a.submitted_at)));
+        const rv=Array.isArray(revs)?revs:[], fn=Array.isArray(fins)?fins:[];
+        document.getElementById('modal-body').innerHTML=`
+        <button class="x" onclick="closeModal()">✕</button>
+        <span class="status status-pending">Final Approval Stage</span>
+        <h2 style="margin-top:8px">${esc(p.event_title)}</h2>
+        <p class="muted" style="font-size:12px">${esc(orgName(p.organizer_id))} • ${esc(fmtDate(p.proposed_date))} • ${esc(p.proposed_venue)}</p>
+        <dl class="dl">
+        <dt>Objectives</dt><dd>${esc(p.purpose_objectives)}</dd>
+        <dt>Budget</dt><dd>₱${Number(p.budget_amount||0).toLocaleString()} (${esc(p.funding_source)})</dd>
+        </dl>
+        <h3 style="font-size:13px;margin:10px 0 6px">Prior Reviews</h3>
+        ${rv.length?rv.map(x=>`<div style="font-size:12px;padding:6px 0;border-bottom:1px solid #eef1f6"><span class="status ${statusClass(x.decision)}" style="font-size:10px">${esc(x.decision)}</span> <span class="muted">${esc(x.review_type)}: ${esc(x.comments)}</span></div>`).join(''):'<p class="muted" style="font-size:12px">No prior reviews recorded.</p>'}
+        ${fn.length?`<div style="font-size:12px;padding:6px 0"><span class="status ${statusClass(fn[0].decision)}" style="font-size:10px">${esc(fn[0].decision)}</span> <span class="muted">Finance: budget ₱${Number(fn[0].budget_amount||0).toLocaleString()}</span></div>`:''}
+        ${prevsList.length?`<h3 style="font-size:13px;margin:12px 0 6px">Revision History</h3>${prevsList.map(rv=>`<div style="font-size:12px;padding:7px 10px;background:#fff7ed;border-left:3px solid #f97316;border-radius:6px;margin-bottom:6px"><strong>Revision #${esc(rv.revision_number)}</strong> by <strong style="color:#b45309">${esc(uname(rv.revised_by))}</strong> — ${esc(rv.revision_reason)}${rv.revision_notes?` <span class="muted">(${esc(rv.revision_notes)})</span>`:''}<br><span class="muted">${esc(fmtDT(rv.submitted_at))}</span></div>`).join('')}`:''}
+        ${docList.length?`<h3 style="font-size:13px;margin:12px 0 6px">Attached Documents</h3>${docList.map(d=>`<div style="font-size:13px;padding:4px 0">» <a href="${esc(d.file_path)}" target="_blank" style="color:var(--blue);font-weight:600">${esc(d.document_name)}</a></div>`).join('')}`:''}
+        <div class="field" style="margin-top:14px"><label>Final Decision *</label>
+        <select class="inp" id="fa_decision"><option value="Approved"> Approve — event is go!</option><option value="Returned for Revision">↩ Return for Revision</option><option value="Rejected"> Reject</option></select>
+        </div>
+        <div class="field"><label>Comments</label><textarea class="inp" id="fa_comments" placeholder="Final remarks..."></textarea></div>
+        <div class="form-actions">
+        <button class="btn btn-primary" id="faBtn" onclick="submitFinal(${id})">Submit Final Decision</button>
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        </div>`;
+        document.getElementById('modal').classList.add('show');
+      }
+      function closeModal(){document.getElementById('modal').classList.remove('show');}
+      document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
+      async function submitFinal(id){
+        const dec=document.getElementById('fa_decision').value;
+        const com=document.getElementById('fa_comments').value.trim();
+        if((dec==='Returned for Revision'||dec==='Rejected')&&!com){toast('Comments are required.',true);return;}
+        const btn=document.getElementById('faBtn');btn.disabled=true;btn.textContent='Submitting...';
+        try{
+          const r=await api({action:"final_approval",data:{
+              proposal_id:id, approver_id:USER.user_id,
+              decision:dec,
+              comments:com
+            }});
+          if(r.success){toast('Final decision submitted! Status: '+r.new_status);closeModal();load();}
+          else{toast('Failed.',true);btn.disabled=false;btn.textContent='Submit Final Decision';}
+        }catch(e){toast('Connection error.',true);btn.disabled=false;btn.textContent='Submit Final Decision';}
+      }
+      load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
+      setInterval(function(){if(document.visibilityState==='visible')load();},60000);
+    </script>
+    </body>
+  </html>

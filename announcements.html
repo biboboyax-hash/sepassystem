@@ -1,135 +1,165 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Announcements • SEPAS</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div class="shell" id="shell">
-  <aside class="sidebar">
-    <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
-    <nav class="nav" id="nav"></nav>
-    <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
-  </aside>
-  <main class="main">
-    <header class="top">
-      <div style="display:flex;align-items:center;gap:14px">
-        <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
-        <div><h1 id="page-title">Announcements</h1><p id="page-sub">School-wide announcements and advisories.</p></div>
-      </div>
-      <a class="user-chip" href="settings.html"><span class="avatar" id="avatar">●</span><span><strong id="u-name"></strong><small id="u-role"></small></span></a>
-    </header>
-    <div class="lower">
-      <section class="card" id="post-wrap" style="display:none">
-        <div class="section-head"><div><h2>📢 Post Announcement</h2><p class="section-subtitle">This will be visible to ALL users.</p></div></div>
-        <form id="af">
-          <div class="field"><label>Title *</label><input class="inp" id="a_title" required placeholder="e.g. Deadline reminder: Oct 20"></div>
-          <div class="field"><label>Message *</label><textarea class="inp" id="a_msg" required placeholder="Write the announcement..."></textarea></div>
-          <div class="form-actions"><button class="btn btn-primary" type="submit" id="aBtn">📢 Post Announcement</button></div>
-        </form>
-      </section>
-      <section class="card">
-        <div class="section-head"><div><h2>All Announcements</h2><p class="section-subtitle" id="a-count"></p></div><div class="flex"><button class="chip" onclick="load()">🔄 Refresh</button><button class="chip" style="border-color:#e74c3c;color:#e74c3c" onclick="deleteAllAnn()">🗑 Delete All</button></div></div>
-        <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
-      </section>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Announcements • SEPAS</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <aside class="sidebar">
+        <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+        <nav class="nav" id="nav"></nav>
+        <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+      </aside>
+      <main class="main">
+        <header class="top">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+            <div><h1 id="page-title">Announcements</h1><p id="page-sub">School-wide announcements and advisories.</p></div>
+          </div>
+          <a class="user-chip" href="settings.html"><span class="avatar" id="avatar">●</span><span><strong id="u-name"></strong><small id="u-role"></small></span></a>
+        </header>
+        <div class="lower">
+          <section class="card" id="post-wrap" style="display:none">
+            <div class="section-head"><div><h2>📢 Post Announcement</h2><p class="section-subtitle">This will be visible to ALL users.</p></div></div>
+            <form id="af">
+              <div class="field"><label>Title *</label><input class="inp" id="a_title" required placeholder="e.g. Deadline reminder: Oct 20"></div>
+              <div class="field"><label>Message *</label><textarea class="inp" id="a_msg" required placeholder="Write the announcement..."></textarea></div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit" id="aBtn">📢 Post Announcement</button></div>
+            </form>
+          </section>
+          <section class="card">
+            <div class="section-head"><div><h2>All Announcements</h2><p class="section-subtitle" id="a-count"></p></div><div class="flex" style="gap:8px;margin-bottom:16px">
+                <button class="btn btn-outline" style="padding:8px 16px;font-size:12px" onclick="load()">🔄 Refresh</button>
+                <button class="btn btn-outline" id="markAllChip" style="padding:8px 16px;font-size:12px;border-color:#16a34a;color:#16a34a;font-weight:700" onclick="markAllRead(this)">✓ Mark all as read</button>
+                <button class="btn btn-outline" style="padding:8px 16px;font-size:12px;border-color:#e74c3c;color:#e74c3c;font-weight:700" onclick="deleteAllAnn(this)">🗑 Delete All</button>
+              </div></div>
+            <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
+          </section>
+        </div>
+      </main>
     </div>
-  </main>
-</div>
-<script src="app.js"></script>
-<script>
-pageShell('announcements');
-const IS_ADMIN = USER.role==='System Administrator';
-if(IS_ADMIN){document.getElementById('post-wrap').style.display='block';}
-async function load(){
-  const [ann,users,reads]=await Promise.all([
-    api({action:"all",table:"announcements"}),
-    api({action:"all",table:"users"}),
-    api({action:"all",table:"announcement_reads"})
-  ]);
-  const list=(Array.isArray(ann)?ann:[]).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
-  const allUsers=(Array.isArray(users)?users:[]).filter(u=>String(u.status).toLowerCase()==='active');
-  const allReads=Array.isArray(reads)?reads:[];
-  document.getElementById('a-count').textContent=list.length+' announcement'+(list.length===1?'':'s');
-  const w=document.getElementById('wrap');
-  if(!list.length){w.innerHTML='<div class="empty"><p>📢 No announcements yet.</p></div>';return;}
-  if(!IS_ADMIN){
-    list.forEach(a=>{
-      const already=allReads.some(r=>String(r.announcement_id)===String(a.announcement_id)&&String(r.user_id)===String(USER.user_id));
-      if(!already){
-        api({action:"mark_announcement_read",announcement_id:a.announcement_id,user_id:USER.user_id});
+    <script src="app.js"></script>
+    <script>
+      const IS_ADMIN = USER.role==='System Administrator';
+      pageShell('announcements');
+      if(IS_ADMIN){document.getElementById('post-wrap').style.display='block';}
+      function showLoad(){const w=document.getElementById('wrap');if(w)w.innerHTML='<div class="loading-wrap"><div class="spin"></div>Loading...</div>';}
+      async function load(){
+        showLoad();
+        const [ann,users,reads]=await Promise.all([
+        api({action:"all",table:"announcements"}),
+        api({action:"all",table:"users"}),
+        api({action:"all",table:"announcement_reads"})
+        ]);
+        const list=(Array.isArray(ann)?ann:[]).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
+        const allUsers=(Array.isArray(users)?users:[]).filter(u=>String(u.status).toLowerCase()==='active'&&String(u.role_id)!=='6');
+        const allReads=Array.isArray(reads)?reads:[];
+        document.getElementById('a-count').textContent=list.length+' announcement'+(list.length===1?'':'s');
+        const w=document.getElementById('wrap');
+        if(!list.length){w.innerHTML='<div class="empty"><p>📢 No announcements yet.</p></div>';return;}
+        if(!IS_ADMIN){
+          list.forEach(a=>{
+            const already=allReads.some(r=>String(r.announcement_id)===String(a.announcement_id)&&String(r.user_id)===String(USER.user_id));
+            if(!already){
+              api({action:"mark_announcement_read",announcement_id:a.announcement_id,user_id:USER.user_id});
+            }
+          });
+        }
+        w.innerHTML=list.map(a=>{
+          const uname=id=>{const u=allUsers.find(x=>String(x.user_id)===String(id));return u?u.full_name:'Admin';};
+          const readers=allUsers.filter(u=>allReads.some(r=>String(r.announcement_id)===String(a.announcement_id)&&String(r.user_id)===String(u.user_id)));
+          const unread=allUsers.filter(u=>!allReads.some(r=>String(r.announcement_id)===String(a.announcement_id)&&String(r.user_id)===String(u.user_id)));
+          let readHtml='';
+          if(IS_ADMIN){
+            readHtml='<div style="margin-top:12px;padding-top:10px;border-top:1px dashed #e8e4d8;font-size:11px">'+
+            '<span style="color:#16a34a;font-weight:700">✓ Read by '+readers.length+'/'+allUsers.length+':</span> '+
+            (readers.length?readers.map(u=>esc(u.full_name)).join(', '):'<span class="muted">None yet</span>');
+            if(unread.length){
+              readHtml+='<br><span style="color:#b45309">○ Not read: '+unread.map(u=>esc(u.full_name)).join(', ')+'</span>';
+            }
+            readHtml+='</div>';
+          }
+          return '<div style="background:#fff;border:1px solid #e8e4d8;border-radius:14px;padding:20px 22px;margin-bottom:14px;box-shadow:0 2px 10px rgba(180,140,20,.08);border-left:5px solid #f59e0b">'+
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'+
+          '<div style="flex:1;min-width:0">'+
+          '<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">'+
+          '<span style="background:#fdf3e1;color:#b45309;font-size:10px;font-weight:800;padding:4px 11px;border-radius:99px;letter-spacing:.5px">📢 ANNOUNCEMENT</span>'+
+          '<span class="muted" style="font-size:11px">'+esc(fmtDT(a.created_at))+'</span>'+
+          '</div>'+
+          '<strong style="font-size:16px;color:#1a2036;word-break:break-word">'+esc(a.title)+'</strong>'+
+          '<span style="display:block;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;font-size:13px;color:#4a5a75;line-height:1.7;margin-top:8px">'+esc(a.message)+'</span>'+
+          '<div style="display:flex;align-items:center;gap:7px;margin-top:12px">'+
+          '<span style="width:26px;height:26px;border-radius:50%;background:#101d52;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">'+esc(uname(a.posted_by).charAt(0))+'</span>'+
+          '<span class="muted" style="font-size:11px">'+esc(uname(a.posted_by))+'</span>'+
+          '</div>'+
+          readHtml+'</div>'+
+          '<button onclick="delAnn('+a.announcement_id+',this)" title="Delete this announcement" style="background:#fdeaea;color:#c0392b;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:13px;flex:0 0 32px">🗑</button>'+
+          '</div></div>';
+        }).join('');
       }
-    });
-  }
-  w.innerHTML=list.map(a=>{
-    const uname=id=>{const u=allUsers.find(x=>String(x.user_id)===String(id));return u?u.full_name:'Admin';};
-    const readers=allUsers.filter(u=>allReads.some(r=>String(r.announcement_id)===String(a.announcement_id)&&String(r.user_id)===String(u.user_id)));
-    const unread=allUsers.filter(u=>!allReads.some(r=>String(r.announcement_id)===String(a.announcement_id)&&String(r.user_id)===String(u.user_id)));
-    let readHtml='';
-    if(IS_ADMIN){
-      readHtml='<div style="margin-top:12px;padding-top:10px;border-top:1px dashed #e8e4d8;font-size:11px">'+
-        '<span style="color:#16a34a;font-weight:700">✓ Read by '+readers.length+'/'+allUsers.length+':</span> '+
-        (readers.length?readers.map(u=>esc(u.full_name)).join(', '):'<span class="muted">None yet</span>');
-      if(unread.length){
-        readHtml+='<br><span style="color:#b45309">○ Not read: '+unread.map(u=>esc(u.full_name)).join(', ')+'</span>';
+      async function markAllRead(btn){
+        if(btn){btn.disabled=true;btn.textContent='⏳ Marking...';}
+        try{
+          const rows=await api({action:"all",table:"announcements"});
+          const list=Array.isArray(rows)?rows:[];
+          const reads=await api({action:"where",table:"announcement_reads",field:"user_id",value:String(USER.user_id)});
+          const readIds=new Set((Array.isArray(reads)?reads:[]).map(r=>String(r.announcement_id)));
+          let marked=0;
+          for(const a of list){
+            if(!readIds.has(String(a.announcement_id))){
+              await api({action:"mark_announcement_read",announcement_id:a.announcement_id,user_id:USER.user_id});
+              marked++;
+            }
+          }
+          toast('✓ Marked '+marked+' announcement(s) as read.');
+        }catch(e){
+          toast('❌ Failed: '+(e.message||'check internet/quota'),true);
+        }
+        if(btn){btn.disabled=false;btn.textContent='✓ Mark all as read';}
+        load();
+        refreshAnnDot();
       }
-      readHtml+='</div>';
-    }
-    return '<div style="background:#fff;border:1px solid #e8e4d8;border-radius:14px;padding:20px 22px;margin-bottom:14px;box-shadow:0 2px 10px rgba(180,140,20,.08);border-left:5px solid #f59e0b">'+
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'+
-    '<div style="flex:1;min-width:0">'+
-    '<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">'+
-    '<span style="background:#fdf3e1;color:#b45309;font-size:10px;font-weight:800;padding:4px 11px;border-radius:99px;letter-spacing:.5px">📢 ANNOUNCEMENT</span>'+
-    '<span class="muted" style="font-size:11px">'+esc(fmtDT(a.created_at))+'</span>'+
-    '</div>'+
-    '<strong style="font-size:16px;color:#1a2036;word-break:break-word">'+esc(a.title)+'</strong>'+
-    '<span style="display:block;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;font-size:13px;color:#4a5a75;line-height:1.7;margin-top:8px">'+esc(a.message)+'</span>'+
-    '<div style="display:flex;align-items:center;gap:7px;margin-top:12px">'+
-    '<span style="width:26px;height:26px;border-radius:50%;background:#101d52;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">'+esc(uname(a.posted_by).charAt(0))+'</span>'+
-    '<span class="muted" style="font-size:11px">'+esc(uname(a.posted_by))+'</span>'+
-    '</div>'+
-    readHtml+'</div>'+
-    '<button onclick="delAnn('+a.announcement_id+')" title="Delete this announcement" style="background:#fdeaea;color:#c0392b;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:13px;flex:0 0 32px">🗑</button>'+
-    '</div></div>';
-  }).join('');
-}
-async function deleteAllAnn(){
-  if(!confirm('Delete ALL announcements? This cannot be undone!'))return;
-  const rows=await api({action:"all",table:"announcements"});
-  const list=Array.isArray(rows)?rows:[];
-  if(!list.length){toast('No announcements to delete.');return;}
-  let deleted=0,failed=0;
-  for(let i=0;i<list.length;i++){
-    toast('🗑 Deleting '+(i+1)+' of '+list.length+'...');
-    try{
-      const res=await api({action:"delete",table:"announcements",id:list[i].announcement_id});
-      if(res&&res.success)deleted++;else failed++;
-    }catch(e){failed++;}
-  }
-  if(failed===0){toast('🗑 Deleted '+deleted+' announcement(s).');}
-  else{toast('⚠️ Deleted '+deleted+', but '+failed+' failed.',true);}
-  load();
-}
-async function delAnn(id){
-  if(!confirm('Delete this announcement?'))return;
-  const res=await api({action:"delete",table:"announcements",id:id});
-  if(res&&res.success){toast('🗑 Deleted.');load();}
-  else toast('Delete failed.',true);
-}
-document.getElementById('af').addEventListener('submit',async e=>{
-  e.preventDefault();
-  const b=document.getElementById('aBtn');b.disabled=true;b.textContent='Posting...';
-  const res=await api({action:"insert",table:"announcements",data:{
-    title:document.getElementById('a_title').value,
-    message:document.getElementById('a_msg').value,
-    posted_by:USER.user_id
-  }});
-  if(res&&res.success){toast('📢 Announcement posted!');document.getElementById('af').reset();load();}
-  else toast('Post failed.',true);
-  b.disabled=false;b.textContent='📢 Post Announcement';
-});
-load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠️ Connection failed.</div>';});
-</script>
-</body>
-</html>
+      async function deleteAllAnn(btn){
+        if(!confirm('Delete ALL announcements? This cannot be undone!'))return;
+        if(btn){btn.disabled=true;btn.textContent='⏳ Deleting...';}
+        const rows=await api({action:"all",table:"announcements"});
+        const list=Array.isArray(rows)?rows:[];
+        if(!list.length){toast('No announcements to delete.');return;}
+        let deleted=0,failed=0;
+        for(let i=0;i<list.length;i++){
+          toast('🗑 Deleting '+(i+1)+' of '+list.length+'...');
+          try{
+            const res=await api({action:"delete",table:"announcements",id:list[i].announcement_id});
+            if(res&&res.success)deleted++;else failed++;
+          }catch(e){failed++;}
+        }
+        if(failed===0){toast('🗑 Deleted '+deleted+' announcement(s).');}
+        else{toast('⚠️ Deleted '+deleted+', but '+failed+' failed.',true);}
+        load();
+      }
+      async function delAnn(id,btn){
+        if(!confirm('Delete this announcement?'))return;
+        if(btn){btn.disabled=true;btn.textContent='⏳';}
+        const res=await api({action:"delete",table:"announcements",id:id});
+        if(res&&res.success){toast('🗑 Deleted.');load();}
+        else{toast('Delete failed.',true);if(btn){btn.disabled=false;btn.textContent='🗑';}}
+      }
+      document.getElementById('af').addEventListener('submit',async e=>{
+        e.preventDefault();
+        const b=document.getElementById('aBtn');b.disabled=true;b.textContent='Posting...';
+        const res=await api({action:"insert",table:"announcements",data:{
+            title:document.getElementById('a_title').value,
+            message:document.getElementById('a_msg').value,
+            posted_by:USER.user_id
+          }});
+        if(res&&res.success){toast('📢 Announcement posted!');document.getElementById('af').reset();load();}
+        else toast('Post failed.',true);
+        b.disabled=false;b.textContent='📢 Post Announcement';
+      });
+      load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠️ Connection failed.</div>';});
+    </script>
+    </body>
+  </html>

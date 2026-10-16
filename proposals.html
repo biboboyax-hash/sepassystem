@@ -1,155 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Event Proposals • SEPAS</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div class="shell" id="shell">
- <aside class="sidebar">
- <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
- <nav class="nav" id="nav"></nav>
- <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
- </aside>
- <main class="main">
- <header class="top">
- <div style="display:flex;align-items:center;gap:14px">
- <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
- <div><h1 id="page-title">Event Proposals</h1><p id="page-sub">Browse and manage event proposals.</p></div>
- </div>
- <a class="user-chip" href="settings.html">
- <span class="avatar" id="avatar">●</span>
- <span><strong id="u-name"></strong><small id="u-role"></small></span>
- </a>
- </header>
- 
-<div class="chips" id="chips">
- <button class="chip active" data-f="all">All</button>
- <button class="chip" data-f="review">In Review</button>
- <button class="chip" data-f="approved">Approved</button>
- <button class="chip" data-f="rejected">Rejected</button>
- <button class="chip" data-f="returned">Returned</button>
-</div>
-<section class="card">
- <div class="section-head"><div><h2 id="tbl-title">All Proposals</h2><p class="section-subtitle" id="tbl-count"></p></div>
- <div class="flex"><select class="inp" id="cat-filter" onchange="render()" style="width:170px"><option value="">All Categories</option><option>Academic</option><option>Sports</option><option>Cultural</option><option>Community</option><option>Religious</option><option>Others</option></select><button class="btn btn-outline" onclick="exportCSV()">📥 Export CSV</button><a class="btn btn-primary" href="create_proposal.html">+ New Proposal</a></div></div>
- <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
-</section>
-<div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
- </main>
-</div>
-<script src="app.js"></script>
-<script>
-pageShell('proposals');
-let ALL = [], ORGS = [], filter = 'all';
-async function load() {
- const [p, o] = await Promise.all([api({action:"all",table:"event_proposals"}), api({action:"all",table:"organizers"})]);
- ALL = Array.isArray(p) ? p : []; ORGS = Array.isArray(o) ? o : [];
- ALL.sort((a,b)=>String(b.submitted_at||'').localeCompare(String(a.submitted_at||'')));
- render();
-}
-const orgName = id => { const o = ORGS.find(x=>String(x.organizer_id)===String(id)); return o ? o.organization_name : ('#'+id); };
-function filtered() {
- if (filter==='review') return ALL.filter(p=>PENDING.includes(p.current_status)||p.current_status==='Final Approval');
- if (filter==='approved') return ALL.filter(p=>p.current_status==='Approved');
- if (filter==='rejected') return ALL.filter(p=>p.current_status==='Rejected');
- if (filter==='returned') return ALL.filter(p=>p.current_status==='Returned for Revision');
- return ALL;
-}
-function render() {
- const cat=(document.getElementById('cat-filter').value||'');
- const items = filtered().filter(p=>!cat||String(p.category)===cat);
- document.getElementById('tbl-count').textContent = items.length + ' proposal' + (items.length===1?'':'s');
- const w = document.getElementById('wrap');
- if (!items.length) {
- const catMsg = cat ? 'No proposals under the <strong>'+esc(cat)+'</strong> category yet.<br><span style="font-size:12px">Tip: New proposals with this category will appear here. Existing proposals created before the category feature have no category — check "All Categories" to see them.</span>' : 'No proposals found.';
- w.innerHTML = '<div class="empty"><p>'+catMsg+'</p></div>'; return;
- }
- w.innerHTML = `<table><thead><tr><th>Event</th><th>Organizer</th><th>Date</th><th>Budget</th><th>Status</th><th></th></tr></thead><tbody>${
- items.map(p=>{
- return `<tr>
- <td><strong>${esc(p.event_title)}</strong><small>#${esc(p.proposal_id)}</small>${p.category?` <span class="status status-draft" style="font-size:9px;padding:2px 8px">${esc(p.category)}</span>`:''}</td>
- <td>${esc(orgName(p.organizer_id))}</td>
- <td>${esc(fmtDate(p.proposed_date))}<br>${countdown(p.proposed_date)}</td>
- <td>₱${Number(p.budget_amount||0).toLocaleString()}</td>
- <td><span class="status ${statusClass(p.current_status)}">${esc(p.current_status)}</span></td>
- <td><button class="btn btn-outline" style="padding:6px 13px" onclick="openDetail(${p.proposal_id})">View</button></td>
- </tr>`}).join('')}</tbody></table>`;
-}
-document.getElementById('chips').addEventListener('click', e => {
- const b = e.target.closest('.chip'); if (!b) return;
- document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
- b.classList.add('active'); filter = b.dataset.f; render();
-});
-async function openDetail(id) {
- const p = ALL.find(x=>String(x.proposal_id)===String(id)); if (!p) return;
- const [reqs, docs, hist, revs] = await Promise.all([
- api({action:"where",table:"proposal_requirements",field:"proposal_id",value:String(id)}),
- api({action:"where",table:"proposal_documents",field:"proposal_id",value:String(id)}),
- api({action:"where",table:"proposal_status_history",field:"proposal_id",value:String(id)}),
- api({action:"where",table:"proposal_reviews",field:"proposal_id",value:String(id)})
- ]);
- const isMine = ORGS.some(o=>String(o.organizer_id)===String(p.organizer_id)&&String(o.user_id)===String(USER.user_id));
- const canDelete = isMine; // only the owning organizer can delete
- const h = (Array.isArray(hist)?hist:[]).sort((a,b)=>String(b.changed_at).localeCompare(String(a.changed_at)));
- document.getElementById('modal-body').innerHTML = `
- <button class="x" onclick="closeModal()">✕</button>
- <span class="status ${statusClass(p.current_status)}">${esc(p.current_status)}</span>
- <h2 style="margin-top:8px">${esc(p.event_title)}</h2>
- <p class="muted" style="font-size:12px">Proposal #${esc(p.proposal_id)} • ${esc(orgName(p.organizer_id))}</p>
- <dl class="dl">
- <dt>Description</dt><dd>${esc(p.description)}</dd>
- <dt>Objectives</dt><dd>${esc(p.purpose_objectives)}</dd>
- <dt>Date & Time</dt><dd>${esc(fmtDate(p.proposed_date))}, ${esc(String(p.proposed_start_time||'').slice(0,5))} - ${esc(String(p.proposed_end_time||'').slice(0,5))}</dd>
- <dt>Venue</dt><dd>${esc(p.proposed_venue)}</dd>
- <dt>Budget</dt><dd>₱${Number(p.budget_amount||0).toLocaleString()} (${esc(p.funding_source)})</dd>
- <dt>Requirements</dt><dd>${(Array.isArray(reqs)&&reqs.length)?esc(reqs[0].description):'—'}</dd>
- <dt>Documents</dt><dd>${(Array.isArray(docs)&&docs.length)?docs.map(d=>'» <a href="'+esc(d.file_path)+'" target="_blank" style="color:var(--blue)">'+esc(d.document_name)+'</a>').join('<br>'):'—'}</dd>
- </dl>
- <h3 style="font-size:14px;margin:14px 0 8px">Status History</h3>
- ${h.length?h.map(x=>`<div style="font-size:12px;padding:7px 0;border-bottom:1px solid #eef1f6"><span class="status ${statusClass(x.status)}" style="font-size:10px">${esc(x.status)}</span> <span class="muted">${esc(x.remarks)} — ${esc(fmtDT(x.changed_at))}</span></div>`).join(''):'<p class="muted" style="font-size:12px">No history.</p>'}
- <div class="form-actions">
- <button class="btn btn-outline" onclick="printProposal(${id})">🖨️ Print Summary</button>
- ${canDelete ? `<button class="btn" style="background:#c0392b;color:#fff" onclick="delProposal(${id})">Delete Proposal</button>`:''}
- <button class="btn btn-outline" onclick="closeModal()">Close</button>
- </div>
- ${p.current_status==='Approved'?`<div style="margin-top:18px;border-top:1.5px dashed #dfe4ee;padding-top:16px"><p class="muted" style="font-size:12px">★ Event feedback is available to reviewers in the Event Feedback page.</p></div>`:''}`;
- document.getElementById('modal').classList.add('show');
-}
-function closeModal(){document.getElementById('modal').classList.remove('show');}
-document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
-function exportCSV(){
- const items=filtered();
- const hdr=['Proposal ID','Event Title','Organizer','Date','Venue','Budget','Funding Source','Status','Submitted'];
- const rows=items.map(p=>[p.proposal_id,'"'+String(p.event_title).replace(/"/g,'""')+'"','"'+String(orgName(p.organizer_id)).replace(/"/g,'""')+'"',String(p.proposed_date).slice(0,10),'"'+String(p.proposed_venue).replace(/"/g,'""')+'"',p.budget_amount,'"'+String(p.funding_source).replace(/"/g,'""')+'"',p.current_status,String(p.submitted_at).slice(0,10)]);
- const csv=[hdr.join(','),...rows.map(r=>r.join(','))].join('\n');
- const a=document.createElement('a');
- a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
- a.download='sepas-proposals-'+new Date().toISOString().slice(0,10)+'.csv';
- a.click();
- toast('CSV exported!');
-}
-function printProposal(id){
- const p=ALL.find(x=>String(x.proposal_id)===String(id));if(!p)return;
- const w=window.open('','_blank');
- w.document.write('<html><head><title>SEPAS - Proposal #'+esc(p.proposal_id)+'</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#222}h1{color:#101d52;border-bottom:3px solid #2b64e8;padding-bottom:10px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{border:1px solid #ccc;padding:10px;text-align:left}th{background:#f0f4ff;width:180px}.status{display:inline-block;padding:5px 14px;border-radius:99px;background:#e3ecff;color:#2b64e8;font-weight:bold}@media print{button{display:none}}</style></head><body>');
- w.document.write('<h1>SEPAS Event Proposal</h1><p><button onclick="window.print()">Print</button></p>');
- w.document.write('<table>');
- const rows=[['Proposal ID','#'+esc(p.proposal_id)],['Event Title',esc(p.event_title)],['Organizer',esc(orgName(p.organizer_id))],['Description',esc(p.description)],['Objectives',esc(p.purpose_objectives)],['Date',esc(fmtDate(p.proposed_date))],['Time',esc(String(p.proposed_start_time||'').slice(0,5))+' - '+esc(String(p.proposed_end_time||'').slice(0,5))],['Venue',esc(p.proposed_venue)],['Budget','₱'+Number(p.budget_amount||0).toLocaleString()],['Funding Source',esc(p.funding_source)],['Status','<span class="status">'+esc(p.current_status)+'</span>'],['Submitted',esc(fmtDT(p.submitted_at))]];
- rows.forEach(r=>w.document.write('<tr><th>'+r[0]+'</th><td>'+r[1]+'</td></tr>'));
- w.document.write('</table><p style="margin-top:30px;color:#888;font-size:12px">Generated by SEPAS System — '+new Date().toLocaleString()+'</p>');
- w.document.write('</body></html>');
- w.document.close();
-}
-async function delProposal(id){
- if(!confirm('Delete this proposal PERMANENTLY?\n\nThis will remove it from the database including:\n- Reviews, status history, comments\n- Budget items, documents, requirements\n- Notifications, post-event reports\n\nThis cannot be undone!'))return;
- const r = await api({action:"delete_proposal",proposal_id:id});
- if(r.success){toast('🗑 Proposal permanently deleted from the database.');closeModal();load();}else toast('Delete failed. Please try again.',true);
-}
-load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
-setInterval(function(){if(document.visibilityState==='visible')load();},60000); // auto-refresh
-</script>
-</body>
-</html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Event Proposals • SEPAS</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <aside class="sidebar">
+        <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+        <nav class="nav" id="nav"></nav>
+        <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+      </aside>
+      <main class="main">
+        <header class="top">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+            <div><h1 id="page-title">Event Proposals</h1><p id="page-sub">Browse and manage event proposals.</p></div>
+          </div>
+          <a class="user-chip" href="settings.html">
+            <span class="avatar" id="avatar">●</span>
+            <span><strong id="u-name"></strong><small id="u-role"></small></span>
+          </a>
+        </header>
+
+        <div class="chips" id="chips">
+          <button class="chip active" data-f="all">All</button>
+          <button class="chip" data-f="review">In Review</button>
+          <button class="chip" data-f="approved">Approved</button>
+          <button class="chip" data-f="rejected">Rejected</button>
+          <button class="chip" data-f="returned">Returned</button>
+        </div>
+        <section class="card">
+          <div class="section-head"><div><h2 id="tbl-title">All Proposals</h2><p class="section-subtitle" id="tbl-count"></p></div>
+            <div class="flex"><select class="inp" id="cat-filter" onchange="render()" style="width:170px"><option value="">All Categories</option><option>Academic</option><option>Sports</option><option>Cultural</option><option>Community</option><option>Religious</option><option>Others</option></select><button class="btn btn-outline" onclick="exportCSV(this)">📥 Export CSV</button><a class="btn btn-primary" href="create_proposal.html">+ New Proposal</a></div></div>
+          <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
+        </section>
+        <div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
+      </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+      pageShell('proposals');
+      let ALL = [], ORGS = [], filter = 'all';
+      async function load() {
+        const [p, o] = await Promise.all([api({action:"all",table:"event_proposals"}), api({action:"all",table:"organizers"})]);
+        ALL = Array.isArray(p) ? p : []; ORGS = Array.isArray(o) ? o : [];
+        ALL.sort((a,b)=>String(b.submitted_at||'').localeCompare(String(a.submitted_at||'')));
+        render();
+      }
+      const orgName = id => { const o = ORGS.find(x=>String(x.organizer_id)===String(id)); return o ? o.organization_name : ('#'+id); };
+      function filtered() {
+        if (filter==='review') return ALL.filter(p=>PENDING.includes(p.current_status)||p.current_status==='Final Approval');
+        if (filter==='approved') return ALL.filter(p=>p.current_status==='Approved');
+        if (filter==='rejected') return ALL.filter(p=>p.current_status==='Rejected');
+        if (filter==='returned') return ALL.filter(p=>p.current_status==='Returned for Revision');
+        return ALL;
+      }
+      function render() {
+        const cat=(document.getElementById('cat-filter').value||'');
+        const items = filtered().filter(p=>!cat||String(p.category)===cat);
+        document.getElementById('tbl-count').textContent = items.length + ' proposal' + (items.length===1?'':'s');
+        const w = document.getElementById('wrap');
+        if (!items.length) {
+          const catMsg = cat ? 'No proposals under the <strong>'+esc(cat)+'</strong> category yet.<br><span style="font-size:12px">Tip: New proposals with this category will appear here. Existing proposals created before the category feature have no category — check "All Categories" to see them.</span>' : 'No proposals found.';
+          w.innerHTML = '<div class="empty"><p>'+catMsg+'</p></div>'; return;
+        }
+        w.innerHTML = `<table><thead><tr><th>Event</th><th>Organizer</th><th>Date</th><th>Budget</th><th>Status</th><th></th></tr></thead><tbody>${
+          items.map(p=>{
+            return `<tr>
+            <td><strong>${esc(p.event_title)}</strong><small>#${esc(p.proposal_id)}</small>${p.category?` <span class="status status-draft" style="font-size:9px;padding:2px 8px">${esc(p.category)}</span>`:''}</td>
+            <td>${esc(orgName(p.organizer_id))}</td>
+            <td>${esc(fmtDate(p.proposed_date))}<br>${countdown(p.proposed_date)}</td>
+            <td>₱${Number(p.budget_amount||0).toLocaleString()}</td>
+            <td><span class="status ${statusClass(p.current_status)}">${esc(p.current_status)}</span></td>
+            <td><button class="btn btn-outline" style="padding:6px 13px" onclick="openDetail(${p.proposal_id},this)">View</button></td>
+            </tr>`}).join('')}</tbody></table>`;
+      }
+      document.getElementById('chips').addEventListener('click', e => {
+        const b = e.target.closest('.chip'); if (!b) return;
+        document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+        b.classList.add('active'); filter = b.dataset.f; render();
+      });
+      async function openDetail(id,btn) {
+        if(btn){btn.disabled=true;btn.textContent='⏳';}
+        const p = ALL.find(x=>String(x.proposal_id)===String(id)); if (!p) return;
+        const [reqs, docs, hist, revs] = await Promise.all([
+        api({action:"where",table:"proposal_requirements",field:"proposal_id",value:String(id)}),
+        api({action:"where",table:"proposal_documents",field:"proposal_id",value:String(id)}),
+        api({action:"where",table:"proposal_status_history",field:"proposal_id",value:String(id)}),
+        api({action:"where",table:"proposal_reviews",field:"proposal_id",value:String(id)})
+        ]);
+        const isMine = ORGS.some(o=>String(o.organizer_id)===String(p.organizer_id)&&String(o.user_id)===String(USER.user_id));
+        const canDelete = isMine;
+        const h = (Array.isArray(hist)?hist:[]).sort((a,b)=>String(b.changed_at).localeCompare(String(a.changed_at)));
+        document.getElementById('modal-body').innerHTML = `
+        <button class="x" onclick="closeModal()">✕</button>
+        <span class="status ${statusClass(p.current_status)}">${esc(p.current_status)}</span>
+        <h2 style="margin-top:8px">${esc(p.event_title)}</h2>
+        <p class="muted" style="font-size:12px">Proposal #${esc(p.proposal_id)} • ${esc(orgName(p.organizer_id))}</p>
+        <dl class="dl">
+        <dt>Description</dt><dd>${esc(p.description)}</dd>
+        <dt>Objectives</dt><dd>${esc(p.purpose_objectives)}</dd>
+        <dt>Date & Time</dt><dd>${esc(fmtDate(p.proposed_date))}, ${esc(String(p.proposed_start_time||'').slice(0,5))} - ${esc(String(p.proposed_end_time||'').slice(0,5))}</dd>
+        <dt>Venue</dt><dd>${esc(p.proposed_venue)}</dd>
+        <dt>Budget</dt><dd>₱${Number(p.budget_amount||0).toLocaleString()} (${esc(p.funding_source)})</dd>
+        <dt>Requirements</dt><dd>${(Array.isArray(reqs)&&reqs.length)?esc(reqs[0].description):'—'}</dd>
+        <dt>Documents</dt><dd>${(Array.isArray(docs)&&docs.length)?docs.map(d=>'» <a href="'+esc(d.file_path)+'" target="_blank" style="color:var(--blue)">'+esc(d.document_name)+'</a>').join('<br>'):'—'}</dd>
+        </dl>
+        <h3 style="font-size:14px;margin:14px 0 8px">Status History</h3>
+        ${h.length?h.map(x=>`<div style="font-size:12px;padding:7px 0;border-bottom:1px solid #eef1f6"><span class="status ${statusClass(x.status)}" style="font-size:10px">${esc(x.status)}</span> <span class="muted">${esc(x.remarks)} — ${esc(fmtDT(x.changed_at))}</span></div>`).join(''):'<p class="muted" style="font-size:12px">No history.</p>'}
+        <div class="form-actions">
+        <button class="btn btn-outline" onclick="printProposal(${id})">🖨️ Print Summary</button>
+        ${canDelete ? `<button class="btn" style="background:#c0392b;color:#fff" onclick="delProposal(${id})">Delete Proposal</button>`:''}
+        <button class="btn btn-outline" onclick="closeModal()">Close</button>
+        </div>
+        ${p.current_status==='Approved'?`<div style="margin-top:18px;border-top:1.5px dashed #dfe4ee;padding-top:16px"><p class="muted" style="font-size:12px">★ Event feedback is available to reviewers in the Event Feedback page.</p></div>`:''}`;
+        document.getElementById('modal').classList.add('show');
+      }
+      function closeModal(){document.getElementById('modal').classList.remove('show');}
+      document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
+      function exportCSV(btn){
+        if(btn){btn.disabled=true;btn.textContent='⏳ Exporting...';}
+        const items=filtered();
+        const hdr=['Proposal ID','Event Title','Organizer','Date','Venue','Budget','Funding Source','Status','Submitted'];
+        const rows=items.map(p=>[p.proposal_id,'"'+String(p.event_title).replace(/"/g,'""')+'"','"'+String(orgName(p.organizer_id)).replace(/"/g,'""')+'"',String(p.proposed_date).slice(0,10),'"'+String(p.proposed_venue).replace(/"/g,'""')+'"',p.budget_amount,'"'+String(p.funding_source).replace(/"/g,'""')+'"',p.current_status,String(p.submitted_at).slice(0,10)]);
+        const csv=[hdr.join(','),...rows.map(r=>r.join(','))].join('\n');
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+        a.download='sepas-proposals-'+new Date().toISOString().slice(0,10)+'.csv';
+        a.click();
+        toast('📥 CSV exported!');
+        if(btn){btn.disabled=false;btn.textContent='📥 Export CSV';}
+      }
+      function printProposal(id){
+        const p=ALL.find(x=>String(x.proposal_id)===String(id));if(!p)return;
+        const w=window.open('','_blank');
+        w.document.write('<html><head><title>SEPAS - Proposal #'+esc(p.proposal_id)+'</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#222}h1{color:#101d52;border-bottom:3px solid #2b64e8;padding-bottom:10px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{border:1px solid #ccc;padding:10px;text-align:left}th{background:#f0f4ff;width:180px}.status{display:inline-block;padding:5px 14px;border-radius:99px;background:#e3ecff;color:#2b64e8;font-weight:bold}@media print{button{display:none}}</style></head><body>');
+        w.document.write('<h1>SEPAS Event Proposal</h1><p><button onclick="window.print()">Print</button></p>');
+        w.document.write('<table>');
+        const rows=[['Proposal ID','#'+esc(p.proposal_id)],['Event Title',esc(p.event_title)],['Organizer',esc(orgName(p.organizer_id))],['Description',esc(p.description)],['Objectives',esc(p.purpose_objectives)],['Date',esc(fmtDate(p.proposed_date))],['Time',esc(String(p.proposed_start_time||'').slice(0,5))+' - '+esc(String(p.proposed_end_time||'').slice(0,5))],['Venue',esc(p.proposed_venue)],['Budget','₱'+Number(p.budget_amount||0).toLocaleString()],['Funding Source',esc(p.funding_source)],['Status','<span class="status">'+esc(p.current_status)+'</span>'],['Submitted',esc(fmtDT(p.submitted_at))]];
+        rows.forEach(r=>w.document.write('<tr><th>'+r[0]+'</th><td>'+r[1]+'</td></tr>'));
+        w.document.write('</table><p style="margin-top:30px;color:#888;font-size:12px">Generated by SEPAS System — '+new Date().toLocaleString()+'</p>');
+        w.document.write('</body></html>');
+        w.document.close();
+      }
+      async function delProposal(id){
+        if(!confirm('Delete this proposal PERMANENTLY?\n\nThis will remove it from the database including:\n- Reviews, status history, comments\n- Budget items, documents, requirements\n- Notifications, post-event reports\n\nThis cannot be undone!'))return;
+        const r = await api({action:"delete_proposal",proposal_id:id});
+        if(r.success){toast('🗑 Proposal permanently deleted from the database.');closeModal();load();}else toast('Delete failed. Please try again.',true);
+      }
+      load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
+      setInterval(function(){if(document.visibilityState==='visible')load();},60000);
+    </script>
+    </body>
+  </html>

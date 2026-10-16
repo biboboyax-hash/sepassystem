@@ -1,91 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Settings • SEPAS</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div class="shell" id="shell">
- <aside class="sidebar">
- <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
- <nav class="nav" id="nav"></nav>
- <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
- </aside>
- <main class="main">
- <header class="top">
- <div style="display:flex;align-items:center;gap:14px">
- <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
- <div><h1 id="page-title">Settings</h1><p id="page-sub">Manage your account settings.</p></div>
- </div>
- <a class="user-chip" href="settings.html">
- <span class="avatar" id="avatar">●</span>
- <span><strong id="u-name"></strong><small id="u-role"></small></span>
- </a>
- </header>
- 
-<div class="lower">
- <section class="card">
- <div class="section-head"><div><h2>Profile Information</h2><p class="section-subtitle">Update your name and email.</p></div></div>
- <form id="pf">
- <div class="field"><label>Full Name</label><input class="inp" id="full_name"></div>
- <div class="field"><label>Email</label><input class="inp" type="email" id="email"></div>
- <div class="field"><label>Username</label><input class="inp" id="username" disabled style="background:#f2f5fa"></div>
- <div class="field"><label>Role</label><input class="inp" id="role_disp" disabled style="background:#f2f5fa"></div>
- <div class="form-actions"><button class="btn btn-primary" type="submit" id="pfBtn">Save Profile</button></div>
- </form>
- </section>
- <section class="card">
- <div class="section-head"><div><h2>Change Password</h2><p class="section-subtitle">Choose a strong password.</p></div></div>
- <form id="pw">
- <div class="field"><label>Current Password</label><input class="inp" type="password" id="cur_pw" required></div>
- <div class="field"><label>New Password</label><input class="inp" type="password" id="new_pw" required minlength="6"></div>
- <div class="field"><label>Confirm New Password</label><input class="inp" type="password" id="con_pw" required></div>
-      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);cursor:pointer;margin-top:-6px"><input type="checkbox" onchange="['cur_pw','new_pw','con_pw'].forEach(id=>document.getElementById(id).type=this.checked?'text':'password')"> Show passwords</label>
- <div class="form-actions"><button class="btn btn-primary" type="submit" id="pwBtn">Update Password</button></div>
- </form>
- <div class="note" style="margin-top:18px;background:#fdf3e1;border-radius:10px;padding:12px 15px;font-size:12px;color:#8a6d1a">
- ⚠ <b>Note:</b> Password storage is currently plain text in Google Sheets. Avoid reusing passwords from other websites.
- </div>
- </section>
-</div>
- </main>
-</div>
-<script src="app.js"></script>
-<script>
-pageShell('settings');
-async function init(){
- const u=await api({action:"find",table:"users",id:USER.user_id});
- if(u){document.getElementById('full_name').value=u.full_name||'';document.getElementById('email').value=u.email||'';document.getElementById('username').value=u.username||'';}
- document.getElementById('role_disp').value=USER.role;
-}
-document.getElementById('pf').addEventListener('submit',async e=>{
- e.preventDefault();const b=document.getElementById('pfBtn');b.disabled=true;b.textContent='Saving...';
- try{
- await api({action:"update",table:"users",id:USER.user_id,data:{
- full_name:document.getElementById('full_name').value, email:document.getElementById('email').value
- }});
- USER.full_name=document.getElementById('full_name').value;
- localStorage.setItem('sepas_user',JSON.stringify(USER));
- setTopbar(); toast(' Profile saved!'); 
- }catch(err){toast('Save failed.',true);}
- b.disabled=false;b.textContent='Save Profile';
-});
-document.getElementById('pw').addEventListener('submit',async e=>{
- e.preventDefault();
- const cur=document.getElementById('cur_pw').value, nw=document.getElementById('new_pw').value, cn=document.getElementById('con_pw').value;
- if(nw!==cn){toast('New passwords do not match.',true);return;}
- const b=document.getElementById('pwBtn');b.disabled=true;b.textContent='Updating...';
- try{
- const u=await api({action:"find",table:"users",id:USER.user_id});
- if(!u||String(u.password)!==String(cur)){toast('Current password is wrong.',true);b.disabled=false;b.textContent='Update Password';return;}
- await api({action:"update",table:"users",id:USER.user_id,data:{password:nw}});
- toast(' Password updated!'); document.getElementById('pw').reset();
- }catch(err){toast('Update failed.',true);}
- b.disabled=false;b.textContent='Update Password';
-});
-init();
-</script>
-</body>
-</html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Settings • SEPAS</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <aside class="sidebar">
+        <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+        <nav class="nav" id="nav"></nav>
+        <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+      </aside>
+      <main class="main">
+        <header class="top">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+            <div><h1 id="page-title">Settings</h1><p id="page-sub">Manage your account settings.</p></div>
+          </div>
+          <a class="user-chip" href="settings.html">
+            <span class="avatar" id="avatar">●</span>
+            <span><strong id="u-name"></strong><small id="u-role"></small></span>
+          </a>
+        </header>
+
+        <div class="lower">
+          <section class="card">
+            <div class="section-head"><div><h2>Profile Information</h2><p class="section-subtitle">Update your name and email.</p></div></div>
+            <form id="pf">
+              <div class="field"><label>Full Name</label><input class="inp" id="full_name"></div>
+              <div class="field"><label>Email</label><input class="inp" type="email" id="email"></div>
+              <div class="field"><label>Username</label><input class="inp" id="username" disabled style="background:#f2f5fa"></div>
+              <div class="field"><label>Role</label><input class="inp" id="role_disp" disabled style="background:#f2f5fa"></div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit" id="pfBtn">Save Profile</button></div>
+            </form>
+          </section>
+          <section class="card">
+            <div class="section-head"><div><h2>Change Password</h2><p class="section-subtitle">Choose a strong password.</p></div></div>
+            <form id="pw">
+              <div class="field"><label>Current Password</label><input class="inp" type="password" id="cur_pw" required></div>
+              <div class="field"><label>New Password</label><input class="inp" type="password" id="new_pw" required minlength="6"></div>
+              <div class="field"><label>Confirm New Password</label><input class="inp" type="password" id="con_pw" required></div>
+              <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);cursor:pointer;margin-top:-6px"><input type="checkbox" onchange="['cur_pw','new_pw','con_pw'].forEach(id=>document.getElementById(id).type=this.checked?'text':'password')"> Show passwords</label>
+              <div class="form-actions"><button class="btn btn-primary" type="submit" id="pwBtn">Update Password</button></div>
+            </form>
+            <div class="note" style="margin-top:18px;background:#fdf3e1;border-radius:10px;padding:12px 15px;font-size:12px;color:#8a6d1a">
+              ⚠ <b>Note:</b> Password storage is currently plain text in Google Sheets. Avoid reusing passwords from other websites.
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+      pageShell('settings');
+      async function init(){
+        const u=await api({action:"find",table:"users",id:USER.user_id});
+        if(u){document.getElementById('full_name').value=u.full_name||'';document.getElementById('email').value=u.email||'';document.getElementById('username').value=u.username||'';}
+        document.getElementById('role_disp').value=USER.role;
+      }
+      document.getElementById('pf').addEventListener('submit',async e=>{
+        e.preventDefault();const b=document.getElementById('pfBtn');b.disabled=true;b.textContent='Saving...';
+        try{
+          await api({action:"update",table:"users",id:USER.user_id,data:{
+              full_name:document.getElementById('full_name').value, email:document.getElementById('email').value
+            }});
+          USER.full_name=document.getElementById('full_name').value;
+          localStorage.setItem('sepas_user',JSON.stringify(USER));
+          setTopbar(); toast(' Profile saved!');
+        }catch(err){toast('Save failed.',true);}
+        b.disabled=false;b.textContent='Save Profile';
+      });
+      document.getElementById('pw').addEventListener('submit',async e=>{
+        e.preventDefault();
+        const cur=document.getElementById('cur_pw').value, nw=document.getElementById('new_pw').value, cn=document.getElementById('con_pw').value;
+        if(nw!==cn){toast('New passwords do not match.',true);return;}
+        const b=document.getElementById('pwBtn');b.disabled=true;b.textContent='Updating...';
+        try{
+          const u=await api({action:"find",table:"users",id:USER.user_id});
+          if(!u||String(u.password)!==String(cur)){toast('Current password is wrong.',true);b.disabled=false;b.textContent='Update Password';return;}
+          await api({action:"update",table:"users",id:USER.user_id,data:{password:nw}});
+          toast(' Password updated!'); document.getElementById('pw').reset();
+        }catch(err){toast('Update failed.',true);}
+        b.disabled=false;b.textContent='Update Password';
+      });
+      init();
+    </script>
+    </body>
+  </html>

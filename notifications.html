@@ -1,125 +1,134 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Notifications • SEPAS</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div class="shell" id="shell">
- <aside class="sidebar">
- <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
- <nav class="nav" id="nav"></nav>
- <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
- </aside>
- <main class="main">
- <header class="top">
- <div style="display:flex;align-items:center;gap:14px">
- <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
- <div><h1 id="page-title">Notifications</h1><p id="page-sub">Your system notifications.</p></div>
- </div>
- <a class="user-chip" href="settings.html">
- <span class="avatar" id="avatar">●</span>
- <span><strong id="u-name"></strong><small id="u-role"></small></span>
- </a>
- </header>
- 
-<div class="chips">
- <button class="chip active" data-nf="all" onclick="setNFilter('all',this)">All</button>
- <button class="chip" data-nf="unread" onclick="setNFilter('unread',this)">Unread</button>
- <button class="chip" data-nf="read" onclick="setNFilter('read',this)">Read</button>
- <button class="chip" onclick="load()">🔄 Refresh</button>
- <button class="chip" onclick="markAllRead()"> Mark all as read</button>
- <button class="chip" style="border-color:#e74c3c;color:#e74c3c" onclick="deleteAll()"> Delete all</button>
-</div>
-<section class="card">
- <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
-</section>
- </main>
-</div>
-<script src="app.js"></script>
-<script>
-pageShell('notifications');
-let ALL_N=[], ALL_P=[], N_FILTER='all';
-function setNFilter(f,btn){
- N_FILTER=f;
- document.querySelectorAll('[data-nf]').forEach(b=>b.classList.remove('active'));
- btn.classList.add('active');
- renderNotifs();
-}
-function renderNotifs(){
- const list=ALL_N.filter(n=>{
- const unread=!(String(n.is_read)==='TRUE'||n.is_read===true||String(n.is_read)==='1');
- if(N_FILTER==='unread')return unread;
- if(N_FILTER==='read')return !unread;
- return true;
- });
- const P=ALL_P;
- const w=document.getElementById('wrap');
- if(!list.length){w.innerHTML='<div class="empty"><p>'+(N_FILTER==='unread'?'No unread notifications. 🎉':'No notifications yet.')+'</p></div>';return;}
- w.innerHTML=list.map(n=>{
- const unread=!(String(n.is_read)==='TRUE'||n.is_read===true||String(n.is_read)==='1');
- const p=P.find(x=>String(x.proposal_id)===String(n.proposal_id));
- return `<div class="event-mini" style="${unread?'border-left:4px solid var(--blue);background:#f6f9ff':''}">
- <span class="date-badge" style="background:${unread?'#e3ecff':'#edf0f6'};color:${unread?'var(--blue)':'var(--muted)'};flex:0 0 48px">♧</span>
- <div style="flex:1;min-width:0">
- <strong style="word-break:break-word;overflow-wrap:break-word">${esc(n.title)}</strong>
- <span class="venue" style="word-break:break-word;overflow-wrap:break-word;white-space:pre-wrap;line-height:1.6">${esc(n.message)}</span>
- <span class="venue">${esc(fmtDT(n.created_at))}${p?' • '+esc(p.event_title):''}</span>
- </div>
- <div style="display:flex;gap:6px;align-items:center">
- ${unread?`<button class="btn btn-outline" style="padding:6px 13px" onclick="readOne(${n.notification_id})">Mark read</button>`:''}
- <button onclick="delOne(${n.notification_id})" title="Delete this notification" style="background:#fdeaea;color:#c0392b;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:13px">🗑</button>
- </div>
- </div>`;
- }).join('');
- refreshNotifDot();
-}
-async function load(){
- const [rows, props] = await Promise.all([
- api({action:"where",table:"notifications",field:"user_id",value:String(USER.user_id)}),
- api({action:"all",table:"event_proposals"})
- ]);
- ALL_N=(Array.isArray(rows)?rows:[]).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
- ALL_P=Array.isArray(props)?props:[];
- renderNotifs();
-}
-async function readOne(id){
- await api({action:"update",table:"notifications",id:id,data:{is_read:true,read_at:new Date().toISOString()}});
- load();
-}
-async function markAllRead(){
- const rows=await api({action:"where",table:"notifications",field:"user_id",value:String(USER.user_id)});
- const unread=(Array.isArray(rows)?rows:[]).filter(r=>!(String(r.is_read)==='TRUE'||r.is_read===true||String(r.is_read)==='1'));
- for(const r of unread){ await api({action:"update",table:"notifications",id:r.notification_id,data:{is_read:true,read_at:new Date().toISOString()}}); }
- toast('All notifications marked as read.'); load();
-}
-async function delOne(id){
- if(!confirm('Delete this notification? This cannot be undone.'))return;
- const res=await api({action:"delete",table:"notifications",id:id});
- if(res&&res.success){toast('🗑 Notification deleted.');load();}
- else toast('Delete failed: '+((res&&(res.message||res.error))||'server error'),true);
-}
-async function deleteAll(){
- const rows=await api({action:"where",table:"notifications",field:"user_id",value:String(USER.user_id)});
- const list=Array.isArray(rows)?rows:[];
- const count=list.length;
- if(count===0){toast('No notifications to delete.');return;}
- if(!confirm('Delete ALL '+count+' notification'+(count===1?'':'s')+'? This cannot be undone!'))return;
- let deleted=0, failed=0;
- for(let i=0;i<list.length;i++){
- toast(' Deleting '+(i+1)+' of '+count+'...');
- try{
- const res=await api({action:"delete",table:"notifications",id:list[i].notification_id});
- if(res&&res.success)deleted++;else failed++;
- }catch(e){failed++;}
- }
- if(failed===0){toast('🗑 Deleted '+deleted+' notification(s).');}
- else{toast('⚠ Deleted '+deleted+', but '+failed+' failed.',true);}
- load();
-}
-load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
-</script>
-</body>
-</html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Notifications • SEPAS</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <aside class="sidebar">
+        <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+        <nav class="nav" id="nav"></nav>
+        <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+      </aside>
+      <main class="main">
+        <header class="top">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+            <div><h1 id="page-title">Notifications</h1><p id="page-sub">Your system notifications.</p></div>
+          </div>
+          <a class="user-chip" href="settings.html">
+            <span class="avatar" id="avatar">●</span>
+            <span><strong id="u-name"></strong><small id="u-role"></small></span>
+          </a>
+        </header>
+
+        <div class="chips">
+          <button class="chip active" data-nf="all" onclick="setNFilter('all',this)">All</button>
+          <button class="chip" data-nf="unread" onclick="setNFilter('unread',this)">Unread</button>
+          <button class="chip" data-nf="read" onclick="setNFilter('read',this)">Read</button>
+          <button class="btn btn-outline" style="padding:8px 16px;font-size:12px" onclick="load()">🔄 Refresh</button>
+          <button class="btn btn-outline" style="padding:8px 16px;font-size:12px;border-color:#16a34a;color:#16a34a;font-weight:700" onclick="markAllRead(this)">✓ Mark all as read</button>
+          <button class="btn btn-outline" style="padding:8px 16px;font-size:12px;border-color:#e74c3c;color:#e74c3c;font-weight:700" onclick="deleteAll(this)">🗑 Delete all</button>
+        </div>
+        <section class="card">
+          <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
+        </section>
+      </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+      pageShell('notifications');
+      let ALL_N=[], ALL_P=[], N_FILTER='all';
+      function setNFilter(f,btn){
+        N_FILTER=f;
+        document.querySelectorAll('[data-nf]').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        renderNotifs();
+      }
+      function renderNotifs(){
+        const list=ALL_N.filter(n=>{
+          const unread=!(String(n.is_read)==='TRUE'||n.is_read===true||String(n.is_read)==='1');
+          if(N_FILTER==='unread')return unread;
+          if(N_FILTER==='read')return !unread;
+          return true;
+        });
+        const P=ALL_P;
+        const w=document.getElementById('wrap');
+        if(!list.length){w.innerHTML='<div class="empty"><p>'+(N_FILTER==='unread'?'No unread notifications. 🎉':'No notifications yet.')+'</p></div>';return;}
+        w.innerHTML=list.map(n=>{
+          const unread=!(String(n.is_read)==='TRUE'||n.is_read===true||String(n.is_read)==='1');
+          const p=P.find(x=>String(x.proposal_id)===String(n.proposal_id));
+          return `<div class="event-mini" style="${unread?'border-left:4px solid var(--blue);background:#f6f9ff':''}">
+          <span class="date-badge" style="background:${unread?'#e3ecff':'#edf0f6'};color:${unread?'var(--blue)':'var(--muted)'};flex:0 0 48px">♧</span>
+          <div style="flex:1;min-width:0">
+          <strong style="word-break:break-word;overflow-wrap:break-word">${esc(n.title)}</strong>
+          <span class="venue" style="word-break:break-word;overflow-wrap:break-word;white-space:pre-wrap;line-height:1.6">${esc(n.message)}</span>
+          <span class="venue">${esc(fmtDT(n.created_at))}${p?' • '+esc(p.event_title):''}</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+          ${unread?`<button class="btn btn-outline" style="padding:6px 13px" onclick="readOne(${n.notification_id},this)">Mark read</button>`:''}
+          <button onclick="delOne(${n.notification_id},this)" title="Delete this notification" style="background:#fdeaea;color:#c0392b;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:13px">🗑</button>
+          </div>
+          </div>`;
+        }).join('');
+        refreshNotifDot();
+      }
+      function showLoad(){const w=document.getElementById('wrap');if(w)w.innerHTML='<div class="loading-wrap"><div class="spin"></div>Loading...</div>';}
+      async function load(){
+        showLoad();
+        const [rows, props] = await Promise.all([
+        api({action:"where",table:"notifications",field:"user_id",value:String(USER.user_id)}),
+        api({action:"all",table:"event_proposals"})
+        ]);
+        ALL_N=(Array.isArray(rows)?rows:[]).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
+        ALL_P=Array.isArray(props)?props:[];
+        renderNotifs();
+      }
+      async function readOne(id,btn){
+        if(btn){btn.disabled=true;btn.textContent='⏳';}
+        await api({action:"update",table:"notifications",id:id,data:{is_read:true,read_at:new Date().toISOString()}});
+        load();
+      }
+      async function markAllRead(btn){
+        if(btn){btn.disabled=true;btn.textContent='⏳ Marking...';}
+        const rows=await api({action:"where",table:"notifications",field:"user_id",value:String(USER.user_id)});
+        const unread=(Array.isArray(rows)?rows:[]).filter(r=>!(String(r.is_read)==='TRUE'||r.is_read===true||String(r.is_read)==='1'));
+        for(const r of unread){ await api({action:"update",table:"notifications",id:r.notification_id,data:{is_read:true,read_at:new Date().toISOString()}}); }
+        toast('✓ All notifications marked as read.');
+        if(btn){btn.disabled=false;btn.textContent='✓ Mark all as read';}
+        load();
+      }
+      async function delOne(id,btn){
+        if(!confirm('Delete this notification? This cannot be undone.'))return;
+        if(btn){btn.disabled=true;btn.textContent='⏳';}
+        const res=await api({action:"delete",table:"notifications",id:id});
+        if(res&&res.success){toast('🗑 Notification deleted.');load();}
+        else{toast('Delete failed: '+((res&&(res.message||res.error))||'server error'),true);if(btn){btn.disabled=false;btn.textContent='🗑';}}
+      }
+      async function deleteAll(btn){
+        if(btn){btn.disabled=true;btn.textContent='⏳ Deleting...';}
+        const rows=await api({action:"where",table:"notifications",field:"user_id",value:String(USER.user_id)});
+        const list=Array.isArray(rows)?rows:[];
+        const count=list.length;
+        if(count===0){toast('No notifications to delete.');return;}
+        if(!confirm('Delete ALL '+count+' notification'+(count===1?'':'s')+'? This cannot be undone!'))return;
+        let deleted=0, failed=0;
+        for(let i=0;i<list.length;i++){
+          toast(' Deleting '+(i+1)+' of '+count+'...');
+          try{
+            const res=await api({action:"delete",table:"notifications",id:list[i].notification_id});
+            if(res&&res.success)deleted++;else failed++;
+          }catch(e){failed++;}
+        }
+        if(failed===0){toast('🗑 Deleted '+deleted+' notification(s).');}
+        else{toast('⚠ Deleted '+deleted+', but '+failed+' failed.',true);}
+        if(btn){btn.disabled=false;btn.textContent='🗑 Delete all';}
+        load();
+      }
+      load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
+    </script>
+    </body>
+  </html>

@@ -1,136 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>User Management • SEPAS</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div class="shell" id="shell">
- <aside class="sidebar">
- <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
- <nav class="nav" id="nav"></nav>
- <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
- </aside>
- <main class="main">
- <header class="top">
- <div style="display:flex;align-items:center;gap:14px">
- <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
- <div><h1 id="page-title">User Management</h1><p id="page-sub">Manage system users and roles.</p></div>
- </div>
- <a class="user-chip" href="settings.html">
- <span class="avatar" id="avatar">●</span>
- <span><strong id="u-name"></strong><small id="u-role"></small></span>
- </a>
- </header>
- 
-<div class="grid4" style="grid-template-columns:repeat(3,1fr)" id="stats"></div>
-<div class="lower">
- <section class="card">
- <div class="section-head"><div><h2>All Users</h2><p class="section-subtitle" id="tbl-count"></p></div></div>
- <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
- </section>
- <section class="card">
- <div class="section-head"><div><h2>Add New User</h2><p class="section-subtitle">Create a new account.</p></div></div>
- <form id="af">
- <div class="field"><label>Full Name *</label><input class="inp" id="a_name" required></div>
- <div class="field"><label>Username *</label><input class="inp" id="a_user" required></div>
- <div class="field"><label>Email *</label><input class="inp" type="email" id="a_email" required></div>
- <div class="field"><label>Role *</label><select class="inp" id="a_role" onchange="toggleOrgFields()"></select></div>
- <div id="org-fields" style="display:none;border:1.5px dashed #2b64e8;border-radius:10px;padding:14px;margin-bottom:15px;background:#f6f9ff">
- <p style="font-size:12px;color:#2b64e8;font-weight:700;margin:0 0 10px">ORGANIZER DETAILS (automatic setup — the user can create proposals right away)</p>
- <div class="field"><label>Organization Name *</label><input class="inp" id="a_orgname" placeholder="e.g. Supreme Student Government"></div>
- <div class="field"><label>Organizer Type *</label><select class="inp" id="a_orgtype"><option value="Student Organization">Student Organization</option><option value="Academic Department">Academic Department</option></select></div>
- <div class="field"><label>Contact Information</label><input class="inp" id="a_orgcontact" placeholder="e.g. ssg@school.edu"></div>
- </div>
- <div class="field"><label>Password *</label><input class="inp" type="password" id="a_pass" required minlength="6"></div>
- <div class="form-actions"><button class="btn btn-primary" type="submit" id="aBtn">Add User</button></div>
- </form>
- </section>
-</div>
- </main>
-</div>
-<script src="app.js"></script>
-<script>
-pageShell('users');
-if (USER.role !== 'System Administrator') { document.querySelector('.main').innerHTML = '<div class="card"><div class="empty"><h3>Access Denied</h3><p>Admin only.</p></div></div>'; throw new Error('denied'); }
-let USERS=[], ROLES=[];
-async function load(){
- const [u,r]=await Promise.all([api({action:"all",table:"users"}),api({action:"all",table:"roles"})]);
- USERS=Array.isArray(u)?u:[];ROLES=Array.isArray(r)?r:[];
- document.getElementById('a_role').innerHTML=ROLES.map(r=>`<option value="${r.role_id}">${esc(r.role_name)}</option>`).join('');
- toggleOrgFields();
- toggleOrgFields();
- const active=USERS.filter(x=>String(x.status).toLowerCase()==='active').length;
- document.getElementById('stats').innerHTML=`
- <div class="card metric"><span class="metric-icon">♙</span><div><label>Total Users</label><strong>${USERS.length}</strong></div></div>
- <div class="card metric"><span class="metric-icon green"></span><div><label>Active</label><strong>${active}</strong></div></div>
- <div class="card metric"><span class="metric-icon amber">◷</span><div><label>Inactive</label><strong>${USERS.length-active}</strong></div></div>`;
- document.getElementById('tbl-count').textContent=USERS.length+' users';
- const roleName=id=>{const r=ROLES.find(x=>String(x.role_id)===String(id));return r?r.role_name:'—';};
- document.getElementById('wrap').innerHTML=`<table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${
- USERS.map(u=>`<tr>
- <td><strong>${esc(u.full_name)}</strong><small>@${esc(u.username)} • ${esc(u.email)}</small></td>
- <td><span class="status status-pending" style="background:#edf0f6;color:var(--text)">${esc(roleName(u.role_id))}</span></td>
- <td><span class="status ${String(u.status).toLowerCase()==='active'?'status-approved':'status-rejected'}">${esc(u.status)}</span></td>
- <td style="white-space:nowrap">${String(u.user_id)!==String(USER.user_id)?`<button class="btn ${String(u.status).toLowerCase()==='active'?'btn-outline':''}" style="padding:6px 12px;${String(u.status).toLowerCase()==='active'?'':'background:var(--green);color:#fff;border:0'}" onclick="toggleStatus(${u.user_id},'${esc(u.status)}')">${String(u.status).toLowerCase()==='active'?'Deactivate':'Activate'}</button> <button onclick="delUser(${u.user_id},'${esc(u.username)}')" title="Delete user" style="background:#fdeaea;color:#c0392b;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:13px">🗑</button>`:'<span class="muted" style="font-size:11px">You</span>'}</td>
- </tr>`).join('')}</tbody></table>`;
-}
-async function delUser(id,username){
-  if(String(id)==='1'){toast('The primary administrator cannot be deleted.',true);return;}
-  if(!confirm('PERMANENTLY delete user "'+username+'"?\n\nThis will also remove:\n- Their organizer profile (if any)\n- Their notifications & comments\n\nHistorical review records will remain but show as "User #'+id+'".\n\nThis cannot be undone!'))return;
-  const res=await api({action:"delete_user",user_id:id});
-  if(res&&res.success){toast('🗑 User "'+username+'" deleted from system and database.');load();}
-  else toast('Delete failed: '+((res&&res.message)||'error'),true);
-}
-async function toggleStatus(id,cur){
- const next=String(cur).toLowerCase()==='active'?'Inactive':'Active';
- if(!confirm(`Set user #${id} to ${next}?`))return;
- await api({action:"update",table:"users",id:id,data:{status:next}});
- toast('User '+next.toLowerCase()+'.'); load();
-}
-document.getElementById('af').addEventListener('submit',async e=>{
- e.preventDefault();
- const un=document.getElementById('a_user').value.trim();
- if(USERS.some(u=>String(u.username).toLowerCase()===un.toLowerCase())){toast('Username already exists.',true);return;}
- const roleId=document.getElementById('a_role').value;
- const isOrg=roleId==='1';
- if(isOrg&&!document.getElementById('a_orgname').value.trim()){toast('Organization name is required for organizers.',true);return;}
- const b=document.getElementById('aBtn');b.disabled=true;b.textContent='Adding...';
- try{
- const uRes=await api({action:"insert",table:"users",data:{
- full_name:document.getElementById('a_name').value, username:un,
- email:document.getElementById('a_email').value,
- role_id:roleId,
- password:document.getElementById('a_pass').value, status:'Active'
- }});
- if(!(uRes&&uRes.success)){toast('Add failed.',true);b.disabled=false;b.textContent='Add User';return;}
- const newUserId=uRes.id;
- if(isOrg){
- await api({action:"insert",table:"organizers",data:{
- user_id:newUserId,
- organizer_type:document.getElementById('a_orgtype').value,
- organization_name:document.getElementById('a_orgname').value,
- contact_information:document.getElementById('a_orgcontact').value
- }});
- }
- const roleName=ROLES.find(r=>String(r.role_id)===String(roleId));
- await api({action:"insert",table:"notifications",data:{
- user_id:newUserId, proposal_id:'',
- title:'Welcome to SEPAS!',
- message:'Your account has been created with the role: '+(roleName?roleName.role_name:'User')+'. You can now log in and use the system.',
- notification_type:'welcome', is_read:false, created_at:new Date().toISOString()
- }});
- toast('✅ User added'+(isOrg?' with organizer profile':'')+'!'); document.getElementById('af').reset(); toggleOrgFields(); load();
- }catch(err){toast('Add failed: '+(err.message||err),true);}
- b.disabled=false;b.textContent='Add User';
-});
-function toggleOrgFields(){
- const isOrg=document.getElementById('a_role').value==='1';
- document.getElementById('org-fields').style.display=isOrg?'block':'none';
-}
-load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
-</script>
-</body>
-</html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>User Management • SEPAS</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <aside class="sidebar">
+        <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+        <nav class="nav" id="nav"></nav>
+        <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+      </aside>
+      <main class="main">
+        <header class="top">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+            <div><h1 id="page-title">User Management</h1><p id="page-sub">Manage system users and roles.</p></div>
+          </div>
+          <a class="user-chip" href="settings.html">
+            <span class="avatar" id="avatar">●</span>
+            <span><strong id="u-name"></strong><small id="u-role"></small></span>
+          </a>
+        </header>
+
+        <div class="grid4" style="grid-template-columns:repeat(3,1fr)" id="stats"></div>
+        <div class="lower">
+          <section class="card">
+            <div class="section-head"><div><h2>All Users</h2><p class="section-subtitle" id="tbl-count"></p></div></div>
+            <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
+          </section>
+          <section class="card">
+            <div class="section-head"><div><h2>Add New User</h2><p class="section-subtitle">Create a new account.</p></div></div>
+            <form id="af">
+              <div class="field"><label>Full Name *</label><input class="inp" id="a_name" required></div>
+              <div class="field"><label>Username *</label><input class="inp" id="a_user" required></div>
+              <div class="field"><label>Email *</label><input class="inp" type="email" id="a_email" required></div>
+              <div class="field"><label>Role *</label><select class="inp" id="a_role" onchange="toggleOrgFields()"></select></div>
+              <div id="org-fields" style="display:none;border:1.5px dashed #2b64e8;border-radius:10px;padding:14px;margin-bottom:15px;background:#f6f9ff">
+                <p style="font-size:12px;color:#2b64e8;font-weight:700;margin:0 0 10px">ORGANIZER DETAILS (automatic setup — the user can create proposals right away)</p>
+                <div class="field"><label>Organization Name *</label><input class="inp" id="a_orgname" placeholder="e.g. Supreme Student Government"></div>
+                <div class="field"><label>Organizer Type *</label><select class="inp" id="a_orgtype"><option value="Student Organization">Student Organization</option><option value="Academic Department">Academic Department</option></select></div>
+                <div class="field"><label>Contact Information</label><input class="inp" id="a_orgcontact" placeholder="e.g. ssg@school.edu"></div>
+              </div>
+              <div class="field"><label>Password *</label><input class="inp" type="password" id="a_pass" required minlength="6"></div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit" id="aBtn">Add User</button></div>
+            </form>
+          </section>
+        </div>
+      </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+      pageShell('users');
+      const IS_ADMIN = USER.role==='System Administrator';
+      if (!IS_ADMIN) { document.querySelector('.main').innerHTML = '<div class="card"><div class="empty"><h3>Access Denied</h3><p>This page is for Administrators only.</p></div></div>'; throw new Error('denied'); }
+      let USERS=[], ROLES=[], ORGS=[];
+      async function load(){
+        const [u,r,o]=await Promise.all([api({action:"all",table:"users"}),api({action:"all",table:"roles"}),api({action:"all",table:"organizers"})]);
+        ORGS=Array.isArray(o)?o:[];
+        USERS=Array.isArray(u)?u:[];ROLES=Array.isArray(r)?r:[];
+        ROLES=ROLES.filter(r=>r.role_name==='Organizer');
+        document.getElementById('a_role').innerHTML=ROLES.map(r=>`<option value="${r.role_id}">${esc(r.role_name)}</option>`).join('');
+        toggleOrgFields();
+        const active=USERS.filter(x=>String(x.status).toLowerCase()==='active').length;
+        document.getElementById('stats').innerHTML=`
+        <div class="card metric"><span class="metric-icon">♙</span><div><label>Total Users</label><strong>${USERS.length}</strong></div></div>
+        <div class="card metric"><span class="metric-icon green"></span><div><label>Active</label><strong>${active}</strong></div></div>
+        <div class="card metric"><span class="metric-icon amber">◷</span><div><label>Inactive</label><strong>${USERS.length-active}</strong></div></div>`;
+        document.getElementById('tbl-count').textContent=USERS.length+' users';
+        const roleName=id=>{const r=ROLES.find(x=>String(x.role_id)===String(id));return r?r.role_name:'—';};
+        document.getElementById('wrap').innerHTML=`<table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${
+          USERS.map(u=>`<tr>
+          <td><strong>${esc(u.full_name)}</strong><small>@${esc(u.username)} • ${esc(u.email)}</small></td>
+          <td><span class="status status-pending" style="background:#edf0f6;color:var(--text)">${esc(roleName(u.role_id))}</span></td>
+          <td><span class="status ${String(u.status).toLowerCase()==='active'?'status-approved':'status-rejected'}">${esc(u.status)}</span></td>
+          <td style="white-space:nowrap">${IS_ADMIN?(String(u.user_id)!==String(USER.user_id)?`<button class="btn ${String(u.status).toLowerCase()==='active'?'btn-outline':''}" style="padding:6px 12px;${String(u.status).toLowerCase()==='active'?'':'background:var(--green);color:#fff;border:0'}" onclick="toggleStatus(${u.user_id},'${esc(u.status)}',this)">${String(u.status).toLowerCase()==='active'?'Deactivate':'Activate'}</button> <button onclick="delUser(${u.user_id},'${esc(u.username)}',this)" title="Delete user" style="background:#fdeaea;color:#c0392b;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:13px">🗑</button>`:'<span class="muted" style="font-size:11px">You</span>'):'<span class="muted" style="font-size:11px">—</span>'}</td>
+          </tr>`).join('')}</tbody></table>`;
+      }
+      async function delUser(id,username,btn){
+        if(String(id)==='1'){toast('The primary administrator cannot be deleted.',true);return;}
+        if(btn){btn.disabled=true;btn.textContent='⏳';}
+        if(!confirm('PERMANENTLY delete user "'+username+'"?\n\nThis will also remove:\n- Their organizer profile (if any)\n- Their notifications & comments\n\nHistorical review records will remain but show as "User #'+id+'".\n\nThis cannot be undone!'))return;
+        const res=await api({action:"delete_user",user_id:id});
+        if(res&&res.success){toast('🗑 User "'+username+'" deleted from system and database.');load();}
+        else toast('Delete failed: '+((res&&res.message)||'error'),true);
+      }
+      async function toggleStatus(id,cur,btn){
+        const next=String(cur).toLowerCase()==='active'?'Inactive':'Active';
+        if(!confirm(`Set user #${id} to ${next}?`))return;
+        if(btn){btn.disabled=true;btn.textContent='⏳';}
+        await api({action:"update",table:"users",id:id,data:{status:next}});
+        toast('User '+next.toLowerCase()+'.'); load();
+      }
+      document.getElementById('af').addEventListener('submit',async e=>{
+        e.preventDefault();
+        const un=document.getElementById('a_user').value.trim();
+        if(USERS.some(u=>String(u.username).toLowerCase()===un.toLowerCase())){toast('Username already exists.',true);return;}
+        const roleId=document.getElementById('a_role').value;
+        const isOrg=roleId==='1';
+        if(isOrg&&!document.getElementById('a_orgname').value.trim()){toast('Organization name is required for organizers.',true);return;}
+        const b=document.getElementById('aBtn');b.disabled=true;b.textContent='Adding...';
+        try{
+          const uRes=await api({action:"insert",table:"users",data:{
+              full_name:document.getElementById('a_name').value, username:un,
+              email:document.getElementById('a_email').value,
+              role_id:roleId,
+              password:document.getElementById('a_pass').value, status:'Active'
+            }});
+          if(!(uRes&&uRes.success)){toast('Add failed.',true);b.disabled=false;b.textContent='Add User';return;}
+          const newUserId=uRes.id;
+          if(isOrg){
+            await api({action:"insert",table:"organizers",data:{
+                user_id:newUserId,
+                organizer_type:document.getElementById('a_orgtype').value||'Student Organization',
+                organization_name:document.getElementById('a_orgname').value||'',
+                contact_information:document.getElementById('a_orgcontact').value||''
+              }});
+          }
+          const roleName=ROLES.find(r=>String(r.role_id)===String(roleId));
+          await api({action:"insert",table:"notifications",data:{
+              user_id:newUserId, proposal_id:'',
+              title:'Welcome to SEPAS!',
+              message:'Your account has been created with the role: '+(roleName?roleName.role_name:'User')+'. You can now log in and use the system.',
+              notification_type:'welcome', is_read:false, created_at:new Date().toISOString()
+            }});
+          toast('✅ User added'+(isOrg?' with organizer profile':'')+'!'); document.getElementById('af').reset(); toggleOrgFields(); load();
+        }catch(err){toast('Add failed: '+(err.message||err),true);}
+        b.disabled=false;b.textContent='Add User';
+      });
+      function toggleOrgFields(){
+        const isOrg=document.getElementById('a_role').value==='1';
+        document.getElementById('org-fields').style.display=isOrg?'block':'none';
+      }
+      load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
+    </script>
+    </body>
+  </html>

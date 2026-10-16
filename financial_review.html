@@ -1,125 +1,131 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Financial Review • SEPAS</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div class="shell" id="shell">
- <aside class="sidebar">
- <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
- <nav class="nav" id="nav"></nav>
- <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
- </aside>
- <main class="main">
- <header class="top">
- <div style="display:flex;align-items:center;gap:14px">
- <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
- <div><h1 id="page-title">Financial Review</h1><p id="page-sub">Review budget details of proposals.</p></div>
- </div>
- <a class="user-chip" href="settings.html">
- <span class="avatar" id="avatar">●</span>
- <span><strong id="u-name"></strong><small id="u-role"></small></span>
- </a>
- </header>
- 
-<section class="card">
- <div class="section-head"><div><h2>Pending Financial Review</h2><p class="section-subtitle" id="tbl-count"></p></div></div>
- <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
-</section>
-<div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
- </main>
-</div>
-<script src="app.js"></script>
-<script>
-pageShell('review');
-let ALL=[], ORGS=[], ITEMS=[], MYREV=[];
-async function load(){
- const [p,o,i,r,revs]=await Promise.all([
- api({action:"all",table:"event_proposals"}),
- api({action:"all",table:"organizers"}),
- api({action:"all",table:"event_budget_items"}),
- api({action:"where",table:"financial_reviews",field:"reviewer_id",value:String(USER.user_id)}),
- api({action:"all",table:"proposal_revisions"})
- ]);
- ALL=Array.isArray(p)?p:[];ORGS=Array.isArray(o)?o:[];ITEMS=Array.isArray(i)?i:[];MYREV=Array.isArray(r)?r:[];REVS=Array.isArray(revs)?revs:[];
- const latest={};
- MYREV.forEach(r=>{const k=String(r.proposal_id);if(!latest[k]||String(r.reviewed_at)>String(latest[k].reviewed_at))latest[k]=r;});
- const items=ALL.filter(p=>p.current_status==='Pending Finance Review'&&(!latest[String(p.proposal_id)]||String(latest[String(p.proposal_id)].decision)==='Returned for Revision'));
- document.getElementById('tbl-count').textContent=items.length+' proposal'+(items.length===1?'':'s');
- const w=document.getElementById('wrap');
- if(!items.length){w.innerHTML='<div class="empty"><p>No proposals pending financial review. </p></div>';return;}
- w.innerHTML=`<table><thead><tr><th>Event</th><th>Organizer</th><th>Proposed Budget</th><th></th></tr></thead><tbody>${
- items.map(p=>`<tr>
- <td><strong>${esc(p.event_title)}</strong><small>#${esc(p.proposal_id)}</small>${REVS.some(r=>String(r.proposal_id)===String(p.proposal_id))?' <span class="status status-returned" style="font-size:9px;padding:2px 8px;margin-left:4px">REVISED</span>':''}</td>
- <td>${esc(orgName(p.organizer_id))}</td>
- <td>₱${Number(p.budget_amount||0).toLocaleString()}</td>
- <td><button class="btn btn-primary" style="padding:6px 13px" onclick="openFin(${p.proposal_id})">Review Budget</button></td>
- </tr>`).join('')}</tbody></table>`;
-}
-const orgName=id=>{const o=ORGS.find(x=>String(x.organizer_id)===String(id));return o?o.organization_name:('#'+id);};
-async function openFin(id){
- const p=ALL.find(x=>String(x.proposal_id)===String(id));if(!p)return;
- const [docs,revs]=await Promise.all([
- api({action:"where",table:"proposal_documents",field:"proposal_id",value:String(id)}),
- api({action:"where",table:"proposal_revisions",field:"proposal_id",value:String(id)})
- ]);
- const docList=Array.isArray(docs)?docs:[];
- const revList=(Array.isArray(revs)?revs:[]).sort((a,b)=>String(b.submitted_at).localeCompare(String(a.submitted_at)));
- const items=ITEMS.filter(x=>String(x.proposal_id)===String(id));
- const total=items.reduce((s,x)=>s+(Number(x.quantity||1)*Number(x.unit_cost||0)),0);
- document.getElementById('modal-body').innerHTML=`
- <button class="x" onclick="closeModal()">✕</button>
- <span class="status status-pending">Pending Finance Review</span>
- <h2 style="margin-top:8px">${esc(p.event_title)}</h2>
- <p class="muted" style="font-size:12px">${esc(orgName(p.organizer_id))} • ${esc(fmtDate(p.proposed_date))}</p>
- <dl class="dl">
- <dt>Proposed Budget</dt><dd>₱${Number(p.budget_amount||0).toLocaleString()}</dd>
- <dt>Funding Source</dt><dd>${esc(p.funding_source)}</dd>
- <dt>Budget Items</dt><dd>${items.length?`<table style="font-size:12px"><thead><tr><th>Item</th><th>Qty</th><th>Unit Cost</th><th>Total</th></tr></thead><tbody>${
- items.map(x=>`<tr><td>${esc(x.item_name)}</td><td>${esc(x.quantity)}</td><td>₱${Number(x.unit_cost||0).toLocaleString()}</td><td>₱${(Number(x.quantity||1)*Number(x.unit_cost||0)).toLocaleString()}</td></tr>`).join('')
- }</tbody></table><p style="margin-top:6px"><strong>Items Total: ₱${total.toLocaleString()}</strong></p>`:'No itemized budget submitted.'}</dd>
- </dl>
- ${revList.length?`<h3 style="font-size:13px;margin:12px 0 6px">Revision History (gi-revise sa organizer)</h3>${revList.map(rv=>`<div style="font-size:12px;padding:7px 10px;background:#fff7ed;border-left:3px solid #f97316;border-radius:6px;margin-bottom:6px"><strong>Revision #${esc(rv.revision_number)}</strong> — ${esc(rv.revision_reason)}${rv.revision_notes?` <span class="muted">(${esc(rv.revision_notes)})</span>`:''}<br><span class="muted">${esc(fmtDT(rv.submitted_at))}</span></div>`).join('')}`:''}
- ${docList.length?`<h3 style="font-size:13px;margin:12px 0 6px">Attached Documents</h3>${docList.map(d=>`<div style="font-size:13px;padding:4px 0">» <a href="${esc(d.file_path)}" target="_blank" style="color:var(--blue);font-weight:600">${esc(d.document_name)}</a></div>`).join('')}`:''}
- <div class="form-grid">
- <div class="field"><label>Approved Budget (₱) *</label><input class="inp" type="number" id="f_budget" value="${Number(p.budget_amount||0)}"></div>
- <div class="field"><label>Funding Source *</label><input class="inp" id="f_source" value="${esc(p.funding_source)}"></div>
- </div>
- <div class="field"><label>Decision *</label>
- <select class="inp" id="f_decision"><option value="Approved">Approve — forward to President</option><option value="Returned for Revision">↩ Return for Revision</option><option value="Rejected">Reject</option></select>
- </div>
- <div class="field"><label>Comments</label><textarea class="inp" id="f_comments" placeholder="Budget notes..."></textarea></div>
- <div class="form-actions">
- <button class="btn btn-primary" id="finBtn" onclick="submitFin(${id})">Submit Financial Review</button>
- <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
- </div>`;
- document.getElementById('modal').classList.add('show');
-}
-function closeModal(){document.getElementById('modal').classList.remove('show');}
-document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
-async function submitFin(id){
- const dec=document.getElementById('f_decision').value;
- const com=document.getElementById('f_comments').value.trim();
- if((dec==='Returned for Revision'||dec==='Rejected')&&!com){toast('Comments are required.',true);return;}
- const btn=document.getElementById('finBtn');btn.disabled=true;btn.textContent='Submitting...';
- try{
- const p=ALL.find(x=>String(x.proposal_id)===String(id));
- const r=await api({action:"financial_review",data:{
- proposal_id:id, reviewer_id:USER.user_id,
- budget_amount:document.getElementById('f_budget').value,
- funding_source:document.getElementById('f_source').value,
- decision:dec,
- comments:com
- }});
- if(r.success){toast('Financial review submitted! Status: '+r.new_status);closeModal();load();}
- else{toast('Failed.',true);btn.disabled=false;btn.textContent='Submit Financial Review';}
- }catch(e){toast('Connection error.',true);btn.disabled=false;btn.textContent='Submit Financial Review';}
-}
-load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
-setInterval(function(){if(document.visibilityState==='visible')load();},60000); // auto-refresh
-</script>
-</body>
-</html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Financial Review • SEPAS</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <aside class="sidebar">
+        <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+        <nav class="nav" id="nav"></nav>
+        <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+      </aside>
+      <main class="main">
+        <header class="top">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+            <div><h1 id="page-title">Financial Review</h1><p id="page-sub">Review budget details of proposals.</p></div>
+          </div>
+          <a class="user-chip" href="settings.html">
+            <span class="avatar" id="avatar">●</span>
+            <span><strong id="u-name"></strong><small id="u-role"></small></span>
+          </a>
+        </header>
+
+        <section class="card">
+          <div class="section-head"><div><h2>Pending Financial Review</h2><p class="section-subtitle" id="tbl-count"></p></div></div>
+          <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
+        </section>
+        <div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
+      </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+      pageShell('review');
+      let ALL=[], ORGS=[], ITEMS=[], MYREV=[];
+      function showLoad(){const w=document.getElementById('wrap');if(w)w.innerHTML='<div class="loading-wrap"><div class="spin"></div>Loading...</div>';}
+      async function load(){
+        showLoad();
+        const [p,o,i,r,revs,us]=await Promise.all([
+        api({action:"all",table:"event_proposals"}),
+        api({action:"all",table:"organizers"}),
+        api({action:"all",table:"event_budget_items"}),
+        api({action:"where",table:"financial_reviews",field:"reviewer_id",value:String(USER.user_id)}),
+        api({action:"all",table:"proposal_revisions"}),
+        api({action:"all",table:"users"})
+        ]);
+        ALL=Array.isArray(p)?p:[];ORGS=Array.isArray(o)?o:[];ITEMS=Array.isArray(i)?i:[];MYREV=Array.isArray(r)?r:[];REVS=Array.isArray(revs)?revs:[]; USERS=Array.isArray(us)?us:[];
+        const latest={};
+        MYREV.forEach(r=>{const k=String(r.proposal_id);if(!latest[k]||String(r.reviewed_at)>String(latest[k].reviewed_at))latest[k]=r;});
+        const items=ALL.filter(p=>p.current_status==='Pending Finance Review'&&(!latest[String(p.proposal_id)]||String(latest[String(p.proposal_id)].decision)==='Returned for Revision'));
+        document.getElementById('tbl-count').textContent=items.length+' proposal'+(items.length===1?'':'s');
+        const w=document.getElementById('wrap');
+        if(!items.length){w.innerHTML='<div class="empty"><p>No proposals pending financial review. </p></div>';return;}
+        w.innerHTML=`<table><thead><tr><th>Event</th><th>Organizer</th><th>Proposed Budget</th><th></th></tr></thead><tbody>${
+          items.map(p=>`<tr>
+          <td><strong>${esc(p.event_title)}</strong><small>#${esc(p.proposal_id)}</small>${REVS.some(r=>String(r.proposal_id)===String(p.proposal_id))?' <span class="status status-returned" style="font-size:9px;padding:2px 8px;margin-left:4px">REVISED</span>':''}</td>
+          <td>${esc(orgName(p.organizer_id))}</td>
+          <td>₱${Number(p.budget_amount||0).toLocaleString()}</td>
+          <td><button class="btn btn-primary" style="padding:6px 13px" onclick="openFin(${p.proposal_id},this)">Review Budget</button></td>
+          </tr>`).join('')}</tbody></table>`;
+      }
+      let USERS=[];
+      const uname=id=>{const u=USERS.find(x=>String(x.user_id)===String(id));return u?u.full_name:('User #'+id);};
+      const orgName=id=>{const o=ORGS.find(x=>String(x.organizer_id)===String(id));return o?o.organization_name:('#'+id);};
+      async function openFin(id,btn){
+        if(btn){btn.disabled=true;btn.textContent='⏳';}
+        const p=ALL.find(x=>String(x.proposal_id)===String(id));if(!p)return;
+        const [docs,revs]=await Promise.all([
+        api({action:"where",table:"proposal_documents",field:"proposal_id",value:String(id)}),
+        api({action:"where",table:"proposal_revisions",field:"proposal_id",value:String(id)})
+        ]);
+        const docList=Array.isArray(docs)?docs:[];
+        const revList=(Array.isArray(revs)?revs:[]).sort((a,b)=>String(b.submitted_at).localeCompare(String(a.submitted_at)));
+        const items=ITEMS.filter(x=>String(x.proposal_id)===String(id));
+        const total=items.reduce((s,x)=>s+(Number(x.quantity||1)*Number(x.unit_cost||0)),0);
+        document.getElementById('modal-body').innerHTML=`
+        <button class="x" onclick="closeModal()">✕</button>
+        <span class="status status-pending">Pending Finance Review</span>
+        <h2 style="margin-top:8px">${esc(p.event_title)}</h2>
+        <p class="muted" style="font-size:12px">${esc(orgName(p.organizer_id))} • ${esc(fmtDate(p.proposed_date))}</p>
+        <dl class="dl">
+        <dt>Proposed Budget</dt><dd>₱${Number(p.budget_amount||0).toLocaleString()}</dd>
+        <dt>Funding Source</dt><dd>${esc(p.funding_source)}</dd>
+        <dt>Budget Items</dt><dd>${items.length?`<table style="font-size:12px"><thead><tr><th>Item</th><th>Qty</th><th>Unit Cost</th><th>Total</th></tr></thead><tbody>${
+            items.map(x=>`<tr><td>${esc(x.item_name)}</td><td>${esc(x.quantity)}</td><td>₱${Number(x.unit_cost||0).toLocaleString()}</td><td>₱${(Number(x.quantity||1)*Number(x.unit_cost||0)).toLocaleString()}</td></tr>`).join('')
+          }</tbody></table><p style="margin-top:6px"><strong>Items Total: ₱${total.toLocaleString()}</strong></p>`:'No itemized budget submitted.'}</dd>
+        </dl>
+        ${revList.length?`<h3 style="font-size:13px;margin:12px 0 6px">Revision History</h3>${revList.map(rv=>`<div style="font-size:12px;padding:7px 10px;background:#fff7ed;border-left:3px solid #f97316;border-radius:6px;margin-bottom:6px"><strong>Revision #${esc(rv.revision_number)}</strong> by <strong style="color:#b45309">${esc(uname(rv.revised_by))}</strong> — ${esc(rv.revision_reason)}${rv.revision_notes?` <span class="muted">(${esc(rv.revision_notes)})</span>`:''}<br><span class="muted">${esc(fmtDT(rv.submitted_at))}</span></div>`).join('')}`:''}
+        ${docList.length?`<h3 style="font-size:13px;margin:12px 0 6px">Attached Documents</h3>${docList.map(d=>`<div style="font-size:13px;padding:4px 0">» <a href="${esc(d.file_path)}" target="_blank" style="color:var(--blue);font-weight:600">${esc(d.document_name)}</a></div>`).join('')}`:''}
+        <div class="form-grid">
+        <div class="field"><label>Approved Budget (₱) *</label><input class="inp" type="number" id="f_budget" value="${Number(p.budget_amount||0)}"></div>
+        <div class="field"><label>Funding Source *</label><input class="inp" id="f_source" value="${esc(p.funding_source)}"></div>
+        </div>
+        <div class="field"><label>Decision *</label>
+        <select class="inp" id="f_decision"><option value="Approved">Approve — forward to President</option><option value="Returned for Revision">↩ Return for Revision</option><option value="Rejected">Reject</option></select>
+        </div>
+        <div class="field"><label>Comments</label><textarea class="inp" id="f_comments" placeholder="Budget notes..."></textarea></div>
+        <div class="form-actions">
+        <button class="btn btn-primary" id="finBtn" onclick="submitFin(${id})">Submit Financial Review</button>
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        </div>`;
+        document.getElementById('modal').classList.add('show');
+      }
+      function closeModal(){document.getElementById('modal').classList.remove('show');}
+      document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
+      async function submitFin(id){
+        const dec=document.getElementById('f_decision').value;
+        const com=document.getElementById('f_comments').value.trim();
+        if((dec==='Returned for Revision'||dec==='Rejected')&&!com){toast('Comments are required.',true);return;}
+        const btn=document.getElementById('finBtn');btn.disabled=true;btn.textContent='Submitting...';
+        try{
+          const p=ALL.find(x=>String(x.proposal_id)===String(id));
+          const r=await api({action:"financial_review",data:{
+              proposal_id:id, reviewer_id:USER.user_id,
+              budget_amount:document.getElementById('f_budget').value,
+              funding_source:document.getElementById('f_source').value,
+              decision:dec,
+              comments:com
+            }});
+          if(r.success){toast('Financial review submitted! Status: '+r.new_status);closeModal();load();}
+          else{toast('Failed.',true);btn.disabled=false;btn.textContent='Submit Financial Review';}
+        }catch(e){toast('Connection error.',true);btn.disabled=false;btn.textContent='Submit Financial Review';}
+      }
+      load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
+      setInterval(function(){if(document.visibilityState==='visible')load();},60000);
+    </script>
+    </body>
+  </html>

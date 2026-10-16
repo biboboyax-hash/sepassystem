@@ -1,110 +1,110 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Event Feedback • SEPAS</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div class="shell" id="shell">
-  <aside class="sidebar">
-    <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
-    <nav class="nav" id="nav"></nav>
-    <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
-  </aside>
-  <main class="main">
-    <header class="top">
-      <div style="display:flex;align-items:center;gap:14px">
-        <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
-        <div><h1 id="page-title">Event Feedback</h1><p id="page-sub">Rate and review approved events.</p></div>
-      </div>
-      <a class="user-chip" href="settings.html"><span class="avatar" id="avatar">●</span><span><strong id="u-name"></strong><small id="u-role"></small></span></a>
-    </header>
-    <section class="card">
-      <div class="section-head"><div><h2>Approved Events</h2><p class="section-subtitle" id="count"></p></div></div>
-      <div id="role-note"></div>
-      <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
-    </section>
-  </main>
-</div>
-<div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
-<script src="app.js"></script>
-<script>
-pageShell('feedback');
-let PROPS=[], ORGS=[], FEEDBACK=[], USERS=[];
-const VIEW_ONLY = USER.role==='Organizer' || USER.role==='System Administrator';
-if(VIEW_ONLY){
-  document.getElementById('role-note').innerHTML='<div style="background:#f0f4ff;border:1.5px solid #6c5ce7;border-radius:10px;padding:10px 14px;font-size:12px;color:#333;margin-bottom:14px">ℹ️ You are viewing feedback in <strong>read-only mode</strong>. Only Student Affairs, Finance, and the President can submit event feedback.</div>';
-}
-const CAN_FEEDBACK = ['Student Affairs','Finance','School President'].includes(USER.role);
-async function load(){
-  const [p,o,f,u]=await Promise.all([
-    api({action:"all",table:"event_proposals"}),
-    api({action:"all",table:"organizers"}),
-    api({action:"all",table:"event_feedback"}),
-    api({action:"all",table:"users"})
-  ]);
-  PROPS=(Array.isArray(p)?p:[]).filter(x=>x.current_status==='Approved');
-  ORGS=Array.isArray(o)?o:[]; FEEDBACK=Array.isArray(f)?f:[]; USERS=Array.isArray(u)?u:[];
-  document.getElementById('count').textContent=PROPS.length+' approved event'+(PROPS.length===1?'':'s');
-  const w=document.getElementById('wrap');
-  if(!PROPS.length){w.innerHTML='<div class="empty"><p>No approved events yet to feedback.</p></div>';return;}
-  w.innerHTML='<table><thead><tr><th>Event</th><th>Organizer</th><th>Date</th><th>Rating</th><th></th></tr></thead><tbody>'+
-    PROPS.map(p=>{
-      const fb=FEEDBACK.filter(x=>String(x.proposal_id)===String(p.proposal_id));
-      const avg=fb.length?(fb.reduce((s,x)=>s+Number(x.rating||0),0)/fb.length).toFixed(1):null;
-      const mine=fb.find(x=>String(x.user_id)===String(USER.user_id));
-      return '<tr>'+
-        '<td><strong>'+esc(p.event_title)+'</strong><small>#'+esc(p.proposal_id)+'</small></td>'+
-        '<td>'+esc(orgName(p.organizer_id))+'</td>'+
-        '<td>'+esc(fmtDate(p.proposed_date))+'</td>'+
-        '<td>'+(avg?'★ '+avg+'/5 ('+fb.length+')':'<span class="muted">No rating</span>')+(mine?' <span class="status status-approved" style="font-size:9px">Rated</span>':'')+'</td>'+
-        '<td><button class="btn btn-outline" style="padding:6px 13px" onclick="openFeedback('+p.proposal_id+')">'+(CAN_FEEDBACK?(mine?'Edit':'Rate Event'):'View')+'</button></td>'+
-      '</tr>';
-    }).join('')+'</tbody></table>';
-}
-const orgName=id=>{const o=ORGS.find(x=>String(x.organizer_id)===String(id));return o?o.organization_name:('#'+id);};
-const uname=id=>{const u=USERS.find(x=>String(x.user_id)===String(id));return u?u.full_name:('User #'+id);};
-async function openFeedback(id){
-  const p=PROPS.find(x=>String(x.proposal_id)===String(id));if(!p)return;
-  const fb=FEEDBACK.filter(x=>String(x.proposal_id)===String(id));
-  const mine=fb.find(x=>String(x.user_id)===String(USER.user_id));
-  const avg=fb.length?(fb.reduce((s,x)=>s+Number(x.rating||0),0)/fb.length).toFixed(1):null;
-  document.getElementById('modal-body').innerHTML=
-    '<button class="x" onclick="closeModal()">✕</button>'+
-    '<span class="status status-approved">Approved Event</span>'+
-    '<h2 style="margin-top:8px">'+esc(p.event_title)+'</h2>'+
-    '<p class="muted" style="font-size:12px">'+esc(orgName(p.organizer_id))+' • '+esc(fmtDate(p.proposed_date))+' • '+esc(p.proposed_venue)+'</p>'+
-    (avg?'<p style="margin:10px 0"><strong style="font-size:18px">★ '+avg+'/5</strong> <span class="muted">average from '+fb.length+' feedback</span></p>':'')+
-    (CAN_FEEDBACK?
-      '<div class="field" style="margin-top:14px"><label>Your Rating *</label><select class="inp" id="f-rating">'+
-      [5,4,3,2,1].map(n=>'<option value="'+n+'"'+(mine&&Number(mine.rating)===n?' selected':'')+'>'+'★'.repeat(n)+' ('+n+'/5)</option>').join('')+'</select></div>'+
-      '<div class="field"><label>Your Feedback</label><textarea class="inp" id="f-text" placeholder="How was the event?">'+(mine?esc(mine.feedback_text):'')+'</textarea></div>'+
-      '<div class="form-actions"><button class="btn btn-primary" id="fBtn" onclick="saveFeedback('+id+')">'+(mine?'Update Feedback':'Submit Feedback')+'</button><button class="btn btn-outline" onclick="closeModal()">Cancel</button></div>'
-      :'')+
-    '<h3 style="font-size:13px;margin:16px 0 8px">All Feedback</h3>'+
-    (fb.length?fb.slice().reverse().map(f=>
-      '<div style="font-size:12px;padding:8px 12px;background:#f2f5fa;border-radius:8px;margin-bottom:6px">'+
-      '<strong>'+'★'.repeat(Number(f.rating)||5)+'</strong> — '+esc(f.feedback_text)+
-      '<br><span class="muted">'+esc(uname(f.user_id))+' • '+esc(fmtDT(f.created_at))+'</span></div>').join('')
-      :'<p class="muted" style="font-size:12px">No feedback yet.</p>');
-  document.getElementById('modal').classList.add('show');
-}
-function closeModal(){document.getElementById('modal').classList.remove('show');}
-document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
-async function saveFeedback(id){
-  const b=document.getElementById('fBtn');b.disabled=true;b.textContent='Saving...';
-  const res=await api({action:"submit_feedback",data:{
-    proposal_id:id,user_id:USER.user_id,
-    rating:document.getElementById('f-rating').value,
-    feedback_text:document.getElementById('f-text').value.trim()
-  }});
-  if(res&&res.success){toast('★ Feedback saved!');closeModal();load();}
-  else toast(res&&res.message?res.message:'Failed.',true);
-  b.disabled=false;
-}
-load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠️ Connection failed.</div>';});
-</script>
-</body>
-</html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Event Feedback • SEPAS</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <aside class="sidebar">
+        <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+        <nav class="nav" id="nav"></nav>
+        <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+      </aside>
+      <main class="main">
+        <header class="top">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+            <div><h1 id="page-title">Event Feedback</h1><p id="page-sub">Rate and review approved events.</p></div>
+          </div>
+          <a class="user-chip" href="settings.html"><span class="avatar" id="avatar">●</span><span><strong id="u-name"></strong><small id="u-role"></small></span></a>
+        </header>
+        <section class="card">
+          <div class="section-head"><div><h2>Approved Events</h2><p class="section-subtitle" id="count"></p></div></div>
+          <div id="role-note"></div>
+          <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
+        </section>
+      </main>
+    </div>
+    <div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
+    <script src="app.js"></script>
+    <script>
+      pageShell('feedback');
+      let PROPS=[], ORGS=[], FEEDBACK=[], USERS=[];
+      const VIEW_ONLY = USER.role==='Organizer' || USER.role==='System Administrator';
+      if(VIEW_ONLY){
+        document.getElementById('role-note').innerHTML='<div style="background:#f0f4ff;border:1.5px solid #6c5ce7;border-radius:10px;padding:10px 14px;font-size:12px;color:#333;margin-bottom:14px">ℹ️ You are viewing feedback in <strong>read-only mode</strong>. Only Student Affairs, Finance, and the President can submit event feedback.</div>';
+      }
+      const CAN_FEEDBACK = ['Student Affairs','Finance','School President'].includes(USER.role);
+      async function load(){
+        const [p,o,f,u]=await Promise.all([
+        api({action:"all",table:"event_proposals"}),
+        api({action:"all",table:"organizers"}),
+        api({action:"all",table:"event_feedback"}),
+        api({action:"all",table:"users"})
+        ]);
+        PROPS=(Array.isArray(p)?p:[]).filter(x=>x.current_status==='Approved');
+        ORGS=Array.isArray(o)?o:[]; FEEDBACK=Array.isArray(f)?f:[]; USERS=Array.isArray(u)?u:[];
+        document.getElementById('count').textContent=PROPS.length+' approved event'+(PROPS.length===1?'':'s');
+        const w=document.getElementById('wrap');
+        if(!PROPS.length){w.innerHTML='<div class="empty"><p>No approved events yet to feedback.</p></div>';return;}
+        w.innerHTML='<table><thead><tr><th>Event</th><th>Organizer</th><th>Date</th><th>Rating</th><th></th></tr></thead><tbody>'+
+        PROPS.map(p=>{
+          const fb=FEEDBACK.filter(x=>String(x.proposal_id)===String(p.proposal_id));
+          const avg=fb.length?(fb.reduce((s,x)=>s+Number(x.rating||0),0)/fb.length).toFixed(1):null;
+          const mine=fb.find(x=>String(x.user_id)===String(USER.user_id));
+          return '<tr>'+
+          '<td><strong>'+esc(p.event_title)+'</strong><small>#'+esc(p.proposal_id)+'</small></td>'+
+          '<td>'+esc(orgName(p.organizer_id))+'</td>'+
+          '<td>'+esc(fmtDate(p.proposed_date))+'</td>'+
+          '<td>'+(avg?'★ '+avg+'/5 ('+fb.length+')':'<span class="muted">No rating</span>')+(mine?' <span class="status status-approved" style="font-size:9px">Rated</span>':'')+'</td>'+
+          '<td><button class="btn btn-outline" style="padding:6px 13px" onclick="openFeedback('+p.proposal_id+')">'+(CAN_FEEDBACK?(mine?'Edit':'Rate Event'):'View')+'</button></td>'+
+          '</tr>';
+        }).join('')+'</tbody></table>';
+      }
+      const orgName=id=>{const o=ORGS.find(x=>String(x.organizer_id)===String(id));return o?o.organization_name:('#'+id);};
+      const uname=id=>{const u=USERS.find(x=>String(x.user_id)===String(id));return u?u.full_name:('User #'+id);};
+      async function openFeedback(id){
+        const p=PROPS.find(x=>String(x.proposal_id)===String(id));if(!p)return;
+        const fb=FEEDBACK.filter(x=>String(x.proposal_id)===String(id));
+        const mine=fb.find(x=>String(x.user_id)===String(USER.user_id));
+        const avg=fb.length?(fb.reduce((s,x)=>s+Number(x.rating||0),0)/fb.length).toFixed(1):null;
+        document.getElementById('modal-body').innerHTML=
+        '<button class="x" onclick="closeModal()">✕</button>'+
+        '<span class="status status-approved">Approved Event</span>'+
+        '<h2 style="margin-top:8px">'+esc(p.event_title)+'</h2>'+
+        '<p class="muted" style="font-size:12px">'+esc(orgName(p.organizer_id))+' • '+esc(fmtDate(p.proposed_date))+' • '+esc(p.proposed_venue)+'</p>'+
+        (avg?'<p style="margin:10px 0"><strong style="font-size:18px">★ '+avg+'/5</strong> <span class="muted">average from '+fb.length+' feedback</span></p>':'')+
+        (CAN_FEEDBACK?
+        '<div class="field" style="margin-top:14px"><label>Your Rating *</label><select class="inp" id="f-rating">'+
+        [5,4,3,2,1].map(n=>'<option value="'+n+'"'+(mine&&Number(mine.rating)===n?' selected':'')+'>'+'★'.repeat(n)+' ('+n+'/5)</option>').join('')+'</select></div>'+
+        '<div class="field"><label>Your Feedback</label><textarea class="inp" id="f-text" placeholder="How was the event?">'+(mine?esc(mine.feedback_text):'')+'</textarea></div>'+
+        '<div class="form-actions"><button class="btn btn-primary" id="fBtn" onclick="saveFeedback('+id+')">'+(mine?'Update Feedback':'Submit Feedback')+'</button><button class="btn btn-outline" onclick="closeModal()">Cancel</button></div>'
+        :'')+
+        '<h3 style="font-size:13px;margin:16px 0 8px">All Feedback</h3>'+
+        (fb.length?fb.slice().reverse().map(f=>
+        '<div style="font-size:12px;padding:8px 12px;background:#f2f5fa;border-radius:8px;margin-bottom:6px">'+
+        '<strong>'+'★'.repeat(Number(f.rating)||5)+'</strong> — '+esc(f.feedback_text)+
+        '<br><span class="muted">'+esc(uname(f.user_id))+' • '+esc(fmtDT(f.created_at))+'</span></div>').join('')
+        :'<p class="muted" style="font-size:12px">No feedback yet.</p>');
+        document.getElementById('modal').classList.add('show');
+      }
+      function closeModal(){document.getElementById('modal').classList.remove('show');}
+      document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
+      async function saveFeedback(id){
+        const b=document.getElementById('fBtn');b.disabled=true;b.textContent='Saving...';
+        const res=await api({action:"submit_feedback",data:{
+            proposal_id:id,user_id:USER.user_id,
+            rating:document.getElementById('f-rating').value,
+            feedback_text:document.getElementById('f-text').value.trim()
+          }});
+        if(res&&res.success){toast('★ Feedback saved!');closeModal();load();}
+        else toast(res&&res.message?res.message:'Failed.',true);
+        b.disabled=false;
+      }
+      load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠️ Connection failed.</div>';});
+    </script>
+    </body>
+  </html>

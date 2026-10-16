@@ -1,157 +1,163 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Review Queue • SEPAS</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div class="shell" id="shell">
- <aside class="sidebar">
- <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
- <nav class="nav" id="nav"></nav>
- <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
- </aside>
- <main class="main">
- <header class="top">
- <div style="display:flex;align-items:center;gap:14px">
- <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
- <div><h1 id="page-title">Review Queue</h1><p id="page-sub">Review pending event proposals (Student Affairs).</p></div>
- </div>
- <a class="user-chip" href="settings.html">
- <span class="avatar" id="avatar">●</span>
- <span><strong id="u-name"></strong><small id="u-role"></small></span>
- </a>
- </header>
- 
-<div class="chips" id="chips">
- <button class="chip active" data-f="pending">Pending Review</button>
- <button class="chip" data-f="history">Reviewed by Me</button>
-</div>
-<section class="card">
- <div class="section-head"><div><h2 id="tbl-title">Pending Proposals</h2><p class="section-subtitle" id="tbl-count"></p></div></div>
- <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
-</section>
-<div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
- </main>
-</div>
-<script src="app.js"></script>
-<script>
-pageShell('review');
-let ALL=[], ORGS=[], MYREV=[];
-async function load(){
- const [p,o,r,revs]=await Promise.all([
- api({action:"all",table:"event_proposals"}),
- api({action:"all",table:"organizers"}),
- api({action:"where",table:"proposal_reviews",field:"reviewer_id",value:String(USER.user_id)}),
- api({action:"all",table:"proposal_revisions"})
- ]);
- ALL=Array.isArray(p)?p:[]; ORGS=Array.isArray(o)?o:[]; MYREV=Array.isArray(r)?r:[]; REVS=Array.isArray(revs)?revs:[];
- render();
-}
-const orgName=id=>{const o=ORGS.find(x=>String(x.organizer_id)===String(id));return o?o.organization_name:('#'+id);};
-const orgType=id=>{const o=ORGS.find(x=>String(x.organizer_id)===String(id));return o?String(o.organizer_type):'';};
-function latestReviews(){
- const map={};
- MYREV.forEach(r=>{
- const k=String(r.proposal_id);
- if(!map[k]||String(r.reviewed_at)>String(map[k].reviewed_at))map[k]=r;
- });
- return map;
-}
-let filter='pending';
-function filtered(){
- const latest=latestReviews();
- const needsReReview=pid=>{const l=latest[String(pid)];return !l||String(l.decision)==='Returned for Revision';};
- if(filter==='pending') return ALL.filter(p=>p.current_status==='Pending Review'&&needsReReview(p.proposal_id));
- return ALL.filter(p=>latest[String(p.proposal_id)]);
-}
-function nextHint(p){
- const t=orgType(p.organizer_id);
- if(t==='Academic Department') return '→ Pending Dean Review';
- if(Number(p.budget_amount)>0) return '→ Pending Finance Review';
- return '→ Awaiting Final Approval';
-}
-function render(){
- const items=filtered();
- document.getElementById('tbl-count').textContent=items.length+' proposal'+(items.length===1?'':'s');
- const w=document.getElementById('wrap');
- if(!items.length){w.innerHTML='<div class="empty"><p>'+(filter==='pending'?'No pending proposals. ':'No reviews yet.')+'</p></div>';return;}
- w.innerHTML='<table><thead><tr><th>Event</th><th>Organizer</th><th>Org Type</th><th>Budget</th><th>Status</th><th></th></tr></thead><tbody>'+
- items.map(p=>'<tr>'+
- '<td><strong>'+esc(p.event_title)+'</strong><small>#'+esc(p.proposal_id)+'</small>'+(REVS.some(r=>String(r.proposal_id)===String(p.proposal_id))?' <span class="status status-returned" style="font-size:9px;padding:2px 8px;margin-left:4px">REVISED</span>':'')+'</td>'+
- '<td>'+esc(orgName(p.organizer_id))+'</td>'+
- '<td><span class="status status-draft">'+esc(orgType(p.organizer_id)||'—')+'</span></td>'+
- '<td>₱'+Number(p.budget_amount||0).toLocaleString()+'</td>'+
- '<td><span class="status '+statusClass(p.current_status)+'">'+esc(p.current_status)+'</span></td>'+
- '<td>'+(filter==='pending'?'<button class="btn btn-primary" style="padding:6px 13px" onclick="openReview('+p.proposal_id+')">Review</button>':'<span class="muted" style="font-size:11px">Done</span>')+'</td>'+
- '</tr>').join('')+'</tbody></table>';
-}
-document.getElementById('chips').addEventListener('click',e=>{
- const b=e.target.closest('.chip');if(!b)return;
- document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
- b.classList.add('active');filter=b.dataset.f;
- document.getElementById('tbl-title').textContent=filter==='pending'?'Pending Proposals':'My Review History';
- render();
-});
-async function openReview(id){
- const p=ALL.find(x=>String(x.proposal_id)===String(id));if(!p)return;
- const [reqs,docs,revs]=await Promise.all([
- api({action:"where",table:"proposal_requirements",field:"proposal_id",value:String(id)}),
- api({action:"where",table:"proposal_documents",field:"proposal_id",value:String(id)}),
- api({action:"where",table:"proposal_revisions",field:"proposal_id",value:String(id)})
- ]);
- const reqList=Array.isArray(reqs)?reqs:[];
- const revList=(Array.isArray(revs)?revs:[]).sort((a,b)=>String(b.submitted_at).localeCompare(String(a.submitted_at)));
- const docList=Array.isArray(docs)?docs:[];
- document.getElementById('modal-body').innerHTML=
- '<button class="x" onclick="closeModal()">✕</button>'+
- '<span class="status status-pending">'+esc(p.current_status)+'</span>'+
- '<h2 style="margin-top:8px">'+esc(p.event_title)+'</h2>'+
- '<p class="muted" style="font-size:12px">'+esc(orgName(p.organizer_id))+' ('+esc(orgType(p.organizer_id))+') • '+esc(fmtDate(p.proposed_date))+' • '+esc(p.proposed_venue)+'</p>'+
- '<dl class="dl">'+
- '<dt>Description</dt><dd>'+esc(p.description)+'</dd>'+
- '<dt>Objectives</dt><dd>'+esc(p.purpose_objectives)+'</dd>'+
- '<dt>Budget</dt><dd>₱'+Number(p.budget_amount||0).toLocaleString()+' ('+esc(p.funding_source)+')</dd>'+
- '</dl>'+
- (reqList.length?'<h3 style="font-size:13px;margin:12px 0 8px">Requirements Checklist</h3>'+
- reqList.map(r=>'<label style="display:flex;gap:9px;align-items:center;font-size:13px;padding:6px 0;cursor:pointer">'+
- '<input type="checkbox" class="req-cb" data-req="'+r.requirement_id+'" '+(String(r.is_completed)==='TRUE'||r.is_completed===true||String(r.is_completed)==='1'?'checked':'')+'>'+
- '<span>'+esc(r.requirement_name)+' — <span class="muted">'+esc(r.description)+'</span></span></label>').join(''):'')+
- (revList.length?'<h3 style="font-size:13px;margin:12px 0 6px">Revision History (gi-revise sa organizer)</h3>'+revList.map(rv=>'<div style="font-size:12px;padding:7px 10px;background:#fff7ed;border-left:3px solid #f97316;border-radius:6px;margin-bottom:6px"><strong>Revision #'+esc(rv.revision_number)+'</strong> — '+esc(rv.revision_reason)+(rv.revision_notes?' <span class="muted">('+esc(rv.revision_notes)+')</span>':'')+'<br><span class="muted">'+esc(fmtDT(rv.submitted_at))+'</span></div>').join(''):'')+
- (docList.length?'<h3 style="font-size:13px;margin:12px 0 6px">Attached Documents</h3>'+docList.map(d=>'<div style="font-size:13px;padding:4px 0">» <a href="'+esc(d.file_path)+'" target="_blank" style="color:var(--blue);font-weight:600">'+esc(d.document_name)+'</a></div>').join(''):'')+
- '<div class="field" style="margin-top:12px"><label>Decision *</label>'+
- '<select class="inp" id="decision">'+
- '<option value="Approved"> Approve '+esc(nextHint(p))+'</option>'+
- '<option value="Returned for Revision">↩ Return for Revision</option>'+
- '<option value="Rejected"> Reject</option>'+
- '</select></div>'+
- '<div class="field"><label>Comments (required if returning or rejecting)</label><textarea class="inp" id="comments" placeholder="Reason..."></textarea></div>'+
- '<div class="form-actions">'+
- '<button class="btn btn-primary" id="rvBtn" onclick="submitReview('+id+')">Submit Review</button>'+
- '<button class="btn btn-outline" onclick="closeModal()">Cancel</button></div>';
- document.getElementById('modal').classList.add('show');
-}
-function closeModal(){document.getElementById('modal').classList.remove('show');}
-document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
-async function submitReview(id){
- const dec=document.getElementById('decision').value;
- const com=document.getElementById('comments').value.trim();
- if((dec==='Returned for Revision'||dec==='Rejected')&&!com){toast('Comments are required when returning or rejecting.',true);return;}
- const reqs=[...document.querySelectorAll('.req-cb')].map(cb=>({requirement_id:cb.dataset.req,is_completed:cb.checked}));
- const btn=document.getElementById('rvBtn');btn.disabled=true;btn.textContent='Submitting...';
- try{
- const r=await api({action:"review_proposal",data:{
- proposal_id:id, reviewer_id:USER.user_id, review_type:"Student Affairs",
- decision:dec, comments:com, requirements:reqs
- }});
- if(r.success){toast('Review submitted! New status: '+r.new_status);closeModal();load();}
- else{toast('Review failed.',true);btn.disabled=false;btn.textContent='Submit Review';}
- }catch(e){toast('Connection error.',true);btn.disabled=false;btn.textContent='Submit Review';}
-}
-load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
-setInterval(function(){if(document.visibilityState==='visible')load();},60000); // auto-refresh
-</script>
-</body>
-</html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Review Queue • SEPAS</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <aside class="sidebar">
+        <a class="brand" href="dashboard.html"><span class="brand-icon">S</span><strong>SEPAS</strong></a>
+        <nav class="nav" id="nav"></nav>
+        <a class="logout" href="#" onclick="logout();return false;"><span class="nav-icon">↪</span><span>Log Out</span></a>
+      </aside>
+      <main class="main">
+        <header class="top">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button class="menu-toggle" onclick="document.getElementById('shell').classList.toggle('nav-open')">☰</button>
+            <div><h1 id="page-title">Review Queue</h1><p id="page-sub">Review pending event proposals (Student Affairs).</p></div>
+          </div>
+          <a class="user-chip" href="settings.html">
+            <span class="avatar" id="avatar">●</span>
+            <span><strong id="u-name"></strong><small id="u-role"></small></span>
+          </a>
+        </header>
+
+        <div class="chips" id="chips">
+          <button class="chip active" data-f="pending">Pending Review</button>
+          <button class="chip" data-f="history">Reviewed by Me</button>
+        </div>
+        <section class="card">
+          <div class="section-head"><div><h2 id="tbl-title">Pending Proposals</h2><p class="section-subtitle" id="tbl-count"></p></div></div>
+          <div id="wrap"><div class="loading-wrap"><div class="spin"></div>Loading...</div></div>
+        </section>
+        <div class="modal-ov" id="modal"><div class="modal" id="modal-body"></div></div>
+      </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+      pageShell('review');
+      let ALL=[], ORGS=[], MYREV=[];
+      function showLoad(){const w=document.getElementById('wrap');if(w)w.innerHTML='<div class="loading-wrap"><div class="spin"></div>Loading...</div>';}
+      async function load(){
+        showLoad();
+        const [p,o,r,revs,us]=await Promise.all([
+        api({action:"all",table:"event_proposals"}),
+        api({action:"all",table:"organizers"}),
+        api({action:"where",table:"proposal_reviews",field:"reviewer_id",value:String(USER.user_id)}),
+        api({action:"all",table:"proposal_revisions"}),
+        api({action:"all",table:"users"})
+        ]);
+        ALL=Array.isArray(p)?p:[]; ORGS=Array.isArray(o)?o:[]; MYREV=Array.isArray(r)?r:[]; REVS=Array.isArray(revs)?revs:[]; USERS=Array.isArray(us)?us:[];
+        render();
+      }
+      let USERS=[];
+      const uname=id=>{const u=USERS.find(x=>String(x.user_id)===String(id));return u?u.full_name:('User #'+id);};
+      const orgName=id=>{const o=ORGS.find(x=>String(x.organizer_id)===String(id));return o?o.organization_name:('#'+id);};
+      const orgType=id=>{const o=ORGS.find(x=>String(x.organizer_id)===String(id));return o?String(o.organizer_type):'';};
+      function latestReviews(){
+        const map={};
+        MYREV.forEach(r=>{
+          const k=String(r.proposal_id);
+          if(!map[k]||String(r.reviewed_at)>String(map[k].reviewed_at))map[k]=r;
+        });
+        return map;
+      }
+      let filter='pending';
+      function filtered(){
+        const latest=latestReviews();
+        const needsReReview=pid=>{const l=latest[String(pid)];return !l||String(l.decision)==='Returned for Revision';};
+        if(filter==='pending') return ALL.filter(p=>p.current_status==='Pending Review'&&needsReReview(p.proposal_id));
+        return ALL.filter(p=>latest[String(p.proposal_id)]);
+      }
+      function nextHint(p){
+        const t=orgType(p.organizer_id);
+        if(t==='Academic Department') return '→ Pending Dean Review';
+        if(Number(p.budget_amount)>0) return '→ Pending Finance Review';
+        return '→ Awaiting Final Approval';
+      }
+      function render(){
+        const items=filtered();
+        document.getElementById('tbl-count').textContent=items.length+' proposal'+(items.length===1?'':'s');
+        const w=document.getElementById('wrap');
+        if(!items.length){w.innerHTML='<div class="empty"><p>'+(filter==='pending'?'No pending proposals. ':'No reviews yet.')+'</p></div>';return;}
+        w.innerHTML='<table><thead><tr><th>Event</th><th>Organizer</th><th>Org Type</th><th>Budget</th><th>Status</th><th></th></tr></thead><tbody>'+
+        items.map(p=>'<tr>'+
+        '<td><strong>'+esc(p.event_title)+'</strong><small>#'+esc(p.proposal_id)+'</small>'+(REVS.some(r=>String(r.proposal_id)===String(p.proposal_id))?' <span class="status status-returned" style="font-size:9px;padding:2px 8px;margin-left:4px">REVISED</span>':'')+'</td>'+
+        '<td>'+esc(orgName(p.organizer_id))+'</td>'+
+        '<td><span class="status status-draft">'+esc(orgType(p.organizer_id)||'—')+'</span></td>'+
+        '<td>₱'+Number(p.budget_amount||0).toLocaleString()+'</td>'+
+        '<td><span class="status '+statusClass(p.current_status)+'">'+esc(p.current_status)+'</span></td>'+
+        '<td>'+(filter==='pending'?'<button class="btn btn-primary" style="padding:6px 13px" onclick="openReview('+p.proposal_id+')">Review</button>':'<span class="muted" style="font-size:11px">Done</span>')+'</td>'+
+        '</tr>').join('')+'</tbody></table>';
+      }
+      document.getElementById('chips').addEventListener('click',e=>{
+        const b=e.target.closest('.chip');if(!b)return;
+        document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+        b.classList.add('active');filter=b.dataset.f;
+        document.getElementById('tbl-title').textContent=filter==='pending'?'Pending Proposals':'My Review History';
+        render();
+      });
+      async function openReview(id,btn){
+        if(btn){btn.disabled=true;btn.textContent='⏳';}
+        const p=ALL.find(x=>String(x.proposal_id)===String(id));if(!p)return;
+        const [reqs,docs,revs]=await Promise.all([
+        api({action:"where",table:"proposal_requirements",field:"proposal_id",value:String(id)}),
+        api({action:"where",table:"proposal_documents",field:"proposal_id",value:String(id)}),
+        api({action:"where",table:"proposal_revisions",field:"proposal_id",value:String(id)})
+        ]);
+        const reqList=Array.isArray(reqs)?reqs:[];
+        const revList=(Array.isArray(revs)?revs:[]).sort((a,b)=>String(b.submitted_at).localeCompare(String(a.submitted_at)));
+        const docList=Array.isArray(docs)?docs:[];
+        document.getElementById('modal-body').innerHTML=
+        '<button class="x" onclick="closeModal()">✕</button>'+
+        '<span class="status status-pending">'+esc(p.current_status)+'</span>'+
+        '<h2 style="margin-top:8px">'+esc(p.event_title)+'</h2>'+
+        '<p class="muted" style="font-size:12px">'+esc(orgName(p.organizer_id))+' ('+esc(orgType(p.organizer_id))+') • '+esc(fmtDate(p.proposed_date))+' • '+esc(p.proposed_venue)+'</p>'+
+        '<dl class="dl">'+
+        '<dt>Description</dt><dd>'+esc(p.description)+'</dd>'+
+        '<dt>Objectives</dt><dd>'+esc(p.purpose_objectives)+'</dd>'+
+        '<dt>Budget</dt><dd>₱'+Number(p.budget_amount||0).toLocaleString()+' ('+esc(p.funding_source)+')</dd>'+
+        '</dl>'+
+        (reqList.length?'<h3 style="font-size:13px;margin:12px 0 8px">Requirements Checklist</h3>'+
+        reqList.map(r=>'<label style="display:flex;gap:9px;align-items:center;font-size:13px;padding:6px 0;cursor:pointer">'+
+        '<input type="checkbox" class="req-cb" data-req="'+r.requirement_id+'" '+(String(r.is_completed)==='TRUE'||r.is_completed===true||String(r.is_completed)==='1'?'checked':'')+'>'+
+        '<span>'+esc(r.requirement_name)+' — <span class="muted">'+esc(r.description)+'</span></span></label>').join(''):'')+
+        (revList.length?'<h3 style="font-size:13px;margin:12px 0 6px">Revision History</h3>'+revList.map(rv=>'<div style="font-size:12px;padding:7px 10px;background:#fff7ed;border-left:3px solid #f97316;border-radius:6px;margin-bottom:6px"><strong>Revision #'+esc(rv.revision_number)+'</strong> by <strong style="color:#b45309">'+esc(uname(rv.revised_by))+'</strong> — '+esc(rv.revision_reason)+(rv.revision_notes?' <span class="muted">('+esc(rv.revision_notes)+')</span>':'')+'<br><span class="muted">'+esc(fmtDT(rv.submitted_at))+'</span></div>').join(''):'')+
+        (docList.length?'<h3 style="font-size:13px;margin:12px 0 6px">Attached Documents</h3>'+docList.map(d=>'<div style="font-size:13px;padding:4px 0">» <a href="'+esc(d.file_path)+'" target="_blank" style="color:var(--blue);font-weight:600">'+esc(d.document_name)+'</a></div>').join(''):'')+
+        '<div class="field" style="margin-top:12px"><label>Decision *</label>'+
+        '<select class="inp" id="decision">'+
+        '<option value="Approved"> Approve '+esc(nextHint(p))+'</option>'+
+        '<option value="Returned for Revision">↩ Return for Revision</option>'+
+        '<option value="Rejected"> Reject</option>'+
+        '</select></div>'+
+        '<div class="field"><label>Comments (required if returning or rejecting)</label><textarea class="inp" id="comments" placeholder="Reason..."></textarea></div>'+
+        '<div class="form-actions">'+
+        '<button class="btn btn-primary" id="rvBtn" onclick="submitReview('+id+')">Submit Review</button>'+
+        '<button class="btn btn-outline" onclick="closeModal()">Cancel</button></div>';
+        document.getElementById('modal').classList.add('show');
+      }
+      function closeModal(){document.getElementById('modal').classList.remove('show');}
+      document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
+      async function submitReview(id){
+        const dec=document.getElementById('decision').value;
+        const com=document.getElementById('comments').value.trim();
+        if((dec==='Returned for Revision'||dec==='Rejected')&&!com){toast('Comments are required when returning or rejecting.',true);return;}
+        const reqs=[...document.querySelectorAll('.req-cb')].map(cb=>({requirement_id:cb.dataset.req,is_completed:cb.checked}));
+        const btn=document.getElementById('rvBtn');btn.disabled=true;btn.textContent='Submitting...';
+        try{
+          const r=await api({action:"review_proposal",data:{
+              proposal_id:id, reviewer_id:USER.user_id, review_type:"Student Affairs",
+              decision:dec, comments:com, requirements:reqs
+            }});
+          if(r.success){toast('Review submitted! New status: '+r.new_status);closeModal();load();}
+          else{toast('Review failed.',true);btn.disabled=false;btn.textContent='Submit Review';}
+        }catch(e){toast('Connection error.',true);btn.disabled=false;btn.textContent='Submit Review';}
+      }
+      load().catch(()=>{document.getElementById('wrap').innerHTML='<div class="empty">⚠ Connection failed.</div>';});
+      setInterval(function(){if(document.visibilityState==='visible')load();},60000);
+    </script>
+    </body>
+  </html>
